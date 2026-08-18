@@ -1,0 +1,84 @@
+---
+- name: 최초 등록용 서버 기본정보 수집
+  hosts: linux_servers
+  gather_facts: true
+  become: true
+  serial: 20
+
+  pre_tasks:
+    - name: 로컬 인벤토리 보고서 디렉터리 생성
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../reports/inventory"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+  tasks:
+    - name: 보안 구성요소 설치 및 서비스 상태 수집
+      ansible.builtin.shell: |
+        for component in chronyc auditctl rsyslogd authselect pam-auth-update sssctl; do
+          if command -v "$component" >/dev/null 2>&1; then
+            printf '%s=present\n' "$component"
+          else
+            printf '%s=absent\n' "$component"
+          fi
+        done
+        if command -v systemctl >/dev/null 2>&1; then
+          for unit in chronyd chrony auditd rsyslog sshd ssh sssd systemd-timesyncd ntp ntpd; do
+            active=$(systemctl is-active "$unit" 2>/dev/null || true)
+            enabled=$(systemctl is-enabled "$unit" 2>/dev/null || true)
+            if [ -n "$active$enabled" ] && [ "$active" != "unknown" ]; then
+              printf '%s:active=%s:enabled=%s\n' "$unit" "$active" "$enabled"
+            fi
+          done
+        fi
+      args:
+        executable: /bin/bash
+      register: security_components
+      changed_when: false
+
+    - name: 로그인 UID 기본 범위 수집
+      ansible.builtin.command: >-
+        awk '/^(UID_MIN|UID_MAX)[[:space:]]/ { print $1 "=" $2 }'
+        /etc/login.defs
+      register: login_uid_range
+      changed_when: false
+      failed_when: false
+
+    - name: 파일시스템 형식과 마운트 상태 수집
+      ansible.builtin.command: df -PT
+      register: filesystem_status
+      changed_when: false
+
+    - name: 서버별 최신 등록정보 저장
+      ansible.builtin.copy:
+        dest: "{{ playbook_dir }}/../reports/inventory/{{ inventory_hostname }}.json"
+        mode: "0600"
+        content: >-
+          {{
+            {
+              'collected_at': ansible_date_time.iso8601,
+              'inventory_hostname': inventory_hostname,
+              'ansible_host': ansible_host | default(inventory_hostname),
+              'hostname': ansible_hostname,
+              'fqdn': ansible_fqdn,
+              'distribution': ansible_distribution,
+              'distribution_version': ansible_distribution_version,
+              'os_family': ansible_os_family,
+              'kernel': ansible_kernel,
+              'architecture': ansible_architecture,
+              'python_version': ansible_python_version,
+              'service_manager': ansible_service_mgr,
+              'package_manager': ansible_pkg_mgr,
+              'default_ipv4': ansible_default_ipv4 | default({}),
+              'all_ipv4_addresses': ansible_all_ipv4_addresses | default([]),
+              'mounts': ansible_mounts | default([]),
+              'security_components': security_components.stdout_lines | default([]),
+              'login_uid_range': login_uid_range.stdout_lines | default([]),
+              'filesystem_status': filesystem_status.stdout_lines | default([])
+            } | to_nice_json
+          }}
+      delegate_to: localhost
+      become: false

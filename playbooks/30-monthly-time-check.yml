@@ -1,8 +1,18 @@
 ---
 - name: 월간 시간 동기화 및 오차 점검
   hosts: linux_servers
-  gather_facts: false
+  gather_facts: true
   become: true
+  serial: 20
+
+  pre_tasks:
+    - name: 로컬 월간 시간점검 보고서 디렉터리 생성
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../reports/monthly-time/{{ ansible_date_time.date }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
 
   tasks:
     - name: chrony 시스템 시간 오차 조회
@@ -13,21 +23,47 @@
         executable: /bin/bash
       register: chrony_tracking
       changed_when: false
-      failed_when: >-
-        chrony_tracking.rc != 0 or chrony_tracking.stdout | trim == ''
+      failed_when: false
 
     - name: 현재 시간 오차 추출
       ansible.builtin.set_fact:
         current_offset_seconds: >-
           {{ (chrony_tracking.stdout | float) | abs }}
 
-    - name: 허용 시간 오차 검증
+    - name: chrony 동기화 소스 수집
+      ansible.builtin.command: chronyc sources -n
+      register: chrony_sources
+      changed_when: false
+      failed_when: false
+
+    - name: 서버별 월간 시간점검 보고서 저장
+      ansible.builtin.copy:
+        dest: "{{ playbook_dir }}/../reports/monthly-time/{{ ansible_date_time.date }}/{{ inventory_hostname }}-{{ ansible_date_time.time | regex_replace(':', '') }}.json"
+        mode: "0600"
+        content: >-
+          {{
+            {
+              'collected_at': ansible_date_time.iso8601,
+              'inventory_hostname': inventory_hostname,
+              'query_succeeded': chrony_tracking.rc == 0 and chrony_tracking.stdout | trim != '',
+              'offset_seconds': current_offset_seconds | float,
+              'maximum_offset_seconds': ntp_max_offset_seconds | float,
+              'within_threshold': chrony_tracking.rc == 0 and chrony_tracking.stdout | trim != '' and current_offset_seconds | float <= ntp_max_offset_seconds | float,
+              'chrony_sources': chrony_sources.stdout_lines | default([])
+            } | to_nice_json
+          }}
+      delegate_to: localhost
+      become: false
+
+    - name: chrony 조회 및 허용 시간 오차 검증
       ansible.builtin.assert:
         that:
+          - chrony_tracking.rc == 0
+          - chrony_tracking.stdout | trim != ''
           - current_offset_seconds | float <= ntp_max_offset_seconds | float
         fail_msg: >-
-          {{ inventory_hostname }} 시간 오차가 기준을 초과했습니다.
-          offset={{ current_offset_seconds }}s,
+          {{ inventory_hostname }} chrony 상태를 조회할 수 없거나 시간 오차가
+          기준을 초과했습니다. offset={{ current_offset_seconds }}s,
           limit={{ ntp_max_offset_seconds }}s
         success_msg: >-
           시간 오차 정상: offset={{ current_offset_seconds }}s

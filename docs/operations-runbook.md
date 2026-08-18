@@ -38,10 +38,18 @@ CentOS 7과 Ubuntu 16.04는 최신 Ansible의 대상 Python 지원 범위에서 
 ansible-galaxy collection install -r requirements.yml
 ansible-inventory --graph
 ansible-playbook playbooks/00-connectivity.yml
-ansible-playbook playbooks/01-discovery.yml
+ansible-playbook playbooks/01-register-server.yml
 ```
 
-현황 결과를 검토한 뒤 파일럿 한 대에 적용한다.
+최초 등록정보를 검토한 뒤 파일럿 한 대의 보안 사전점검을 수행한다.
+
+```bash
+ansible-playbook playbooks/02-security-preflight.yml \
+  --limit server-01
+```
+
+사전점검 결과에서 SSH 구문, PAM 관리 방식, 계정 잠금·만료, 중앙인증,
+audit immutable 상태와 로그 여유 공간을 확인한 뒤 파일럿에 적용한다.
 
 ```bash
 ansible-playbook playbooks/10-apply-logging.yml \
@@ -65,6 +73,12 @@ apt 캐시를 갱신하고, 기존 `systemd-timesyncd`, `ntp`, `ntpd` unit이 �
 | 매주 | `20-weekly-check.yml` | 로그 용량과 audit 상태 |
 | 매월 | `30-monthly-time-check.yml` | 시간 오차 기준 확인 |
 | 반기 | `40-semiannual-network-review.yml` | 네트워크 서비스 현황수집 |
+| 분기 또는 반기 | `50-account-access-review.yml` | 계정·관리자·로그인·잠금 현황 |
+
+최초 등록 보고서는 서버별 최신본으로 관리한다. 사전점검과 정기점검 보고서는
+`reports/<점검유형>/<날짜>/`에 실행 시각이 포함된 파일로 저장하여 이전 결과를
+덮어쓰지 않는다. 이 보고서에는 사용자 ID와 접속 IP가 포함될 수 있으므로 Git에
+커밋하지 않고 접근권한 `0600`을 유지한다.
 
 운영 단계에서는 AWX/AAP 또는 CI 스케줄을 권장한다. 단순 cron도 가능하지만
 실행 승인, RBAC, 자격증명 보호, 감사 이력과 실패 알림이 부족하다.
