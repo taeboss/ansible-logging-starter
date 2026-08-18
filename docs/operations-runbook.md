@@ -54,6 +54,10 @@ ansible-playbook playbooks/10-apply-logging.yml \
 새 SSH 세션, `sudo -n id`, `sshd -t`, `chronyc tracking`, `auditctl -s`,
 `auditctl -l`을 확인한 후 전체 적용한다. 전체 플레이북은 5대씩 처리한다.
 
+시간 동기화는 모든 배포판에서 chrony로 통일한다. Role은 Ubuntu/Debian의
+apt 캐시를 갱신하고, 기존 `systemd-timesyncd`, `ntp`, `ntpd` unit이 있으면
+중지·비활성화·마스킹한 뒤 chrony 실행 상태와 단독 실행 여부를 검증한다.
+
 ## 정기 운영
 
 | 주기 | 플레이북 | 목적 |
