@@ -71,7 +71,10 @@ audit_retention_policy:
 않는 `KEEP_LOGS`, 시스템을 single-user 또는 halt 상태로 전환하는 동작은 별도
 audit 파티션, 중앙 전송, 복구 인력과 영향도 승인을 갖춘 뒤 선택한다.
 
-## 주간 무결성·용량 점검
+## 주간 무결성·용량 점검 목표
+
+아래 목록은 목표 상태이다. 현재 `20-weekly-check.yml`에는 파일시스템 용량과
+inode, journal 사용량, audit 상태 및 규칙 파일 체크섬까지만 구현되어 있다.
 
 - 로그 파일시스템의 사용률과 inode, 예상 잔여 보존일
 - `auditctl -s`의 enabled, failure, backlog, lost 값

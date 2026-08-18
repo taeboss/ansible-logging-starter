@@ -41,6 +41,27 @@
       register: administrative_groups
       changed_when: false
 
+    - name: 계정 잠금 및 만료 메타데이터 수집
+      ansible.builtin.shell: |
+        awk -F: '
+          NR == FNR {
+            shell[$1]=$7
+            next
+          }
+          ($1 in shell) && shell[$1] !~ /(nologin|false)$/ {
+            # 두 번째 필드는 상태 판정에만 사용하고 해시 자체는 출력하지 않는다.
+            if ($2 == "") password_state="empty"
+            else if ($2 ~ /^(!|\*)/) password_state="locked"
+            else password_state="configured"
+            printf "%s:password_state=%s:last_change=%s:min_days=%s:max_days=%s:warn_days=%s:inactive_days=%s:account_expire=%s\n", $1, password_state, $3, $4, $5, $6, $7, $8
+          }
+        ' /etc/passwd /etc/shadow
+      args:
+        executable: /bin/bash
+      register: account_security_metadata
+      changed_when: false
+      no_log: true
+
     - name: 최근 로그인 정보 수집
       ansible.builtin.command: lastlog
       register: last_login
@@ -70,6 +91,7 @@
               'inventory_hostname': inventory_hostname,
               'login_capable_accounts': login_capable_accounts.stdout_lines | default([]),
               'administrative_groups': administrative_groups.stdout_lines | default([]),
+              'account_security_metadata': account_security_metadata.stdout_lines | default([]),
               'last_login': last_login.stdout_lines | default([]),
               'login_sessions': login_sessions.stdout_lines | default([]),
               'faillock_status': faillock_status.stdout_lines | default([])
