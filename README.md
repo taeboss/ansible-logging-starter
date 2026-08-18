@@ -7,6 +7,8 @@ journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시�
 
 - [결정사항과 구현 현황](docs/decisions-and-status.md)
 - [로깅 정책 매핑](docs/logging-policy-mapping.md)
+- [audit 정책 상세 설계](docs/audit-policy-design.md)
+- [로그 보존정책 상세 설계](docs/log-retention-design.md)
 - [로그인 정책 설계 초안](docs/login-policy-design.md)
 - [구축 및 운영 절차](docs/operations-runbook.md)
 
@@ -79,6 +81,8 @@ ansible-playbook playbooks/10-apply-logging.yml
 ```
 
 로그인 정책은 별도 Role을 구현하기 전까지 실행 명령이 존재하지 않는다.
+audit 규칙 보완과 로그 보존정책 역시 상세 설계만 추가했으며 아직 실행 Role에는
+반영하지 않았다.
 
 ## 적용 전 수정할 값
 
