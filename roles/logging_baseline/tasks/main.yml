@@ -11,8 +11,15 @@
   ansible.builtin.set_fact:
     ssh_service_name: "{{ 'ssh' if ansible_os_family == 'Debian' else 'sshd' }}"
     chrony_service_name: "{{ 'chrony' if ansible_os_family == 'Debian' else 'chronyd' }}"
+    chrony_service_unit: "{{ 'chrony.service' if ansible_os_family == 'Debian' else 'chronyd.service' }}"
     chrony_config_path: "{{ '/etc/chrony/chrony.conf' if ansible_os_family == 'Debian' else '/etc/chrony.conf' }}"
     audit_package_name: "{{ 'auditd' if ansible_os_family == 'Debian' else 'audit' }}"
+
+- name: Ubuntu/Debian apt 캐시 갱신
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == 'Debian'
 
 - name: 로깅 필수 패키지 설치
   ansible.builtin.package:
@@ -21,6 +28,18 @@
       - rsyslog
       - chrony
     state: present
+
+- name: chrony 설치 후 시간 서비스 현황 갱신
+  ansible.builtin.service_facts:
+
+- name: 기존 시간 동기화 서비스 중지 및 비활성화
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop: "{{ legacy_time_services }}"
+  when: item in ansible_facts.services
 
 - name: 로그 관리자 그룹 생성
   ansible.builtin.group:
@@ -129,3 +148,22 @@
     - auditd
     - rsyslog
     - "{{ chrony_service_name }}"
+
+- name: 시간 동기화 서비스 상태 갱신
+  ansible.builtin.service_facts:
+
+- name: chrony 실행 상태 검증
+  ansible.builtin.assert:
+    that:
+      - chrony_service_unit in ansible_facts.services
+      - ansible_facts.services[chrony_service_unit].state == 'running'
+    fail_msg: "{{ chrony_service_unit }}가 실행되고 있지 않습니다."
+
+- name: 기존 시간 동기화 서비스 중지 상태 검증
+  ansible.builtin.assert:
+    that:
+      - >-
+        item not in ansible_facts.services or
+        ansible_facts.services[item].state != 'running'
+    fail_msg: "{{ item }}가 chrony와 동시에 실행 중입니다."
+  loop: "{{ legacy_time_services }}"

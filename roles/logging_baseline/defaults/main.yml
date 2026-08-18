@@ -1,2 +1,7 @@
 ---
 log_profile: summary
+
+legacy_time_services:
+  - systemd-timesyncd.service
+  - ntp.service
+  - ntpd.service
