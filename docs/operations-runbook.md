@@ -73,7 +73,7 @@ apt 캐시를 갱신하고, 기존 `systemd-timesyncd`, `ntp`, `ntpd` unit이 �
 | 매주 | `20-weekly-check.yml` | 로그 용량과 audit 상태 |
 | 매월 | `30-monthly-time-check.yml` | 시간 오차 기준 확인 |
 | 반기 | `40-semiannual-network-review.yml` | 네트워크 서비스 현황수집 |
-| 분기 또는 반기 | `50-account-access-review.yml` | 계정·관리자·로그인·잠금 현황 |
+| 분기 또는 반기 | `50-account-access-review.yml` | 계정·관리자·로그인·잠금·만료 현황 |
 
 최초 등록 보고서는 서버별 최신본으로 관리한다. 사전점검과 정기점검 보고서는
 `reports/<점검유형>/<날짜>/`에 실행 시각이 포함된 파일로 저장하여 이전 결과를

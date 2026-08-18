@@ -91,7 +91,8 @@ audit 규칙 보완과 로그 보존정책 역시 상세 설계만 추가했으�
 3. `inventory/group_vars/all.yml`에서 SSH 개인키 경로, 경고문,
    NTP 서버, 보존 기준을 확정합니다.
 4. 중앙 로그/SIEM이 준비되기 전에는 `central_logging_enabled: false`를
-   유지합니다.
+   유지합니다. 현재 TLS 템플릿은 암호화만 제공하고 CA 기반 서버 인증을
+   수행하지 않습니다.
 
 ## 최초 실행
 
@@ -111,8 +112,9 @@ ansible-playbook playbooks/02-security-preflight.yml --limit server-01
 ```
 
 사전점검 보고서는 `reports/preflight/<날짜>/`에 실행 시각별로 보존됩니다.
-계정명, 접속 IP 및 보안 설정 메타데이터가 포함될 수 있으므로 `reports/`는
-Git에 커밋하지 않습니다.
+사전점검에는 계정명과 보안 설정 메타데이터가, 네트워크·계정 정기점검에는
+접속 IP와 로그인 이력이 포함될 수 있으므로 `reports/`는 Git에 커밋하지
+않습니다.
 
 ## 파일럿 적용
 
