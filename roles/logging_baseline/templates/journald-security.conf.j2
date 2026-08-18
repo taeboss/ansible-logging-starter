@@ -1,0 +1,7 @@
+[Journal]
+Storage=persistent
+Compress=yes
+Seal=yes
+ForwardToSyslog=yes
+MaxRetentionSec={{ local_log_retention_days }}day
+SystemMaxUse={{ journal_max_use }}

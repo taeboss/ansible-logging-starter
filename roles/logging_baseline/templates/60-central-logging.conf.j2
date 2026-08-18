@@ -1,0 +1,28 @@
+# Managed by Ansible
+{% if central_log_tls_enabled %}
+global(DefaultNetstreamDriver="gtls")
+action(
+  type="omfwd"
+  target="{{ central_log_host }}"
+  port="{{ central_log_port }}"
+  protocol="{{ central_log_protocol }}"
+  StreamDriver="gtls"
+  StreamDriverMode="1"
+  StreamDriverAuthMode="anon"
+  action.resumeRetryCount="-1"
+  queue.type="LinkedList"
+  queue.filename="central_forward"
+  queue.saveOnShutdown="on"
+)
+{% else %}
+*.* action(
+  type="omfwd"
+  target="{{ central_log_host }}"
+  port="{{ central_log_port }}"
+  protocol="{{ central_log_protocol }}"
+  action.resumeRetryCount="-1"
+  queue.type="LinkedList"
+  queue.filename="central_forward"
+  queue.saveOnShutdown="on"
+)
+{% endif %}

@@ -1,0 +1,10 @@
+---
+- name: 공통 로그인 경고 및 로깅 기준 적용
+  hosts: linux_servers
+  gather_facts: true
+  become: true
+  serial: 5
+  max_fail_percentage: 0
+
+  roles:
+    - role: logging_baseline

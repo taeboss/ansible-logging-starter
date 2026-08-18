@@ -1,0 +1,17 @@
+---
+- name: SSH, sudo, Python 연결 사전점검
+  hosts: linux_servers
+  gather_facts: false
+  become: false
+  serial: 20
+
+  tasks:
+    - name: Ansible Python 모듈 실행 확인
+      ansible.builtin.ping:
+
+    - name: 비대화형 sudo 확인
+      ansible.builtin.command: id
+      become: true
+      register: sudo_id
+      changed_when: false
+      failed_when: sudo_id.stdout is not search('uid=0')

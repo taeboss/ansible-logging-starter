@@ -1,0 +1,33 @@
+---
+- name: 월간 시간 동기화 및 오차 점검
+  hosts: linux_servers
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: chrony 시스템 시간 오차 조회
+      ansible.builtin.shell: |
+        set -o pipefail
+        LC_ALL=C chronyc tracking | awk '/System time/ { print $4 }'
+      args:
+        executable: /bin/bash
+      register: chrony_tracking
+      changed_when: false
+      failed_when: >-
+        chrony_tracking.rc != 0 or chrony_tracking.stdout | trim == ''
+
+    - name: 현재 시간 오차 추출
+      ansible.builtin.set_fact:
+        current_offset_seconds: >-
+          {{ (chrony_tracking.stdout | float) | abs }}
+
+    - name: 허용 시간 오차 검증
+      ansible.builtin.assert:
+        that:
+          - current_offset_seconds | float <= ntp_max_offset_seconds | float
+        fail_msg: >-
+          {{ inventory_hostname }} 시간 오차가 기준을 초과했습니다.
+          offset={{ current_offset_seconds }}s,
+          limit={{ ntp_max_offset_seconds }}s
+        success_msg: >-
+          시간 오차 정상: offset={{ current_offset_seconds }}s

@@ -1,0 +1,13 @@
+*.retry
+*.vault-password
+.DS_Store
+
+# 실행 시 생성되는 서버 현황 및 점검 결과
+reports/*
+!reports/.gitkeep
+
+# 비밀키 및 임시 파일
+private_keys/
+*.pem
+*.key
+*~

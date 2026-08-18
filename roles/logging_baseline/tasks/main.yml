@@ -1,0 +1,131 @@
+---
+- name: 지원 OS 계열 확인
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family in ['RedHat', 'Debian']
+    fail_msg: >-
+      지원하지 않는 OS입니다:
+      {{ ansible_distribution }} {{ ansible_distribution_version }}
+
+- name: OS별 서비스 및 설정 경로 결정
+  ansible.builtin.set_fact:
+    ssh_service_name: "{{ 'ssh' if ansible_os_family == 'Debian' else 'sshd' }}"
+    chrony_service_name: "{{ 'chrony' if ansible_os_family == 'Debian' else 'chronyd' }}"
+    chrony_config_path: "{{ '/etc/chrony/chrony.conf' if ansible_os_family == 'Debian' else '/etc/chrony.conf' }}"
+    audit_package_name: "{{ 'auditd' if ansible_os_family == 'Debian' else 'audit' }}"
+
+- name: 로깅 필수 패키지 설치
+  ansible.builtin.package:
+    name:
+      - "{{ audit_package_name }}"
+      - rsyslog
+      - chrony
+    state: present
+
+- name: 로그 관리자 그룹 생성
+  ansible.builtin.group:
+    name: "{{ log_admin_group }}"
+    system: true
+    state: present
+
+- name: 준수 점검 로그 디렉터리 생성
+  ansible.builtin.file:
+    path: /var/log/compliance
+    state: directory
+    owner: root
+    group: "{{ log_admin_group }}"
+    mode: "0750"
+
+- name: 콘솔 로그인 전 경고문 설치
+  ansible.builtin.template:
+    src: issue.j2
+    dest: /etc/issue
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+
+- name: SSH 로그인 전 경고문 설치
+  ansible.builtin.template:
+    src: issue.j2
+    dest: /etc/issue.net
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+
+- name: SSH 경고문과 상세 인증 로그 설정
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    backup: true
+    validate: /usr/sbin/sshd -t -f %s
+  loop:
+    - { regexp: '^\s*#?\s*Banner\s+', line: 'Banner /etc/issue.net' }
+    - { regexp: '^\s*#?\s*LogLevel\s+', line: 'LogLevel VERBOSE' }
+  notify: Reload SSH
+
+- name: chrony 설정 설치
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: "{{ chrony_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: Restart chrony
+
+- name: journald drop-in 디렉터리 확인
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: journald 영구 보존 설정 설치
+  ansible.builtin.template:
+    src: journald-security.conf.j2
+    dest: /etc/systemd/journald.conf.d/60-security.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart journald
+
+- name: audit 대상 경로 존재 여부 확인
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop: "{{ audit_sensitive_paths }}"
+  register: audit_path_stats
+
+- name: audit 규칙 설치
+  ansible.builtin.template:
+    src: 50-security-baseline.rules.j2
+    dest: /etc/audit/rules.d/50-security-baseline.rules
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  notify: Load audit rules
+
+- name: 중앙 로그 전송 설정 설치
+  ansible.builtin.template:
+    src: 60-central-logging.conf.j2
+    dest: /etc/rsyslog.d/60-central-logging.conf
+    owner: root
+    group: root
+    mode: "0640"
+    backup: true
+  when: central_logging_enabled | bool
+  notify: Restart rsyslog
+
+- name: 필수 서비스 활성화
+  ansible.builtin.service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - auditd
+    - rsyslog
+    - "{{ chrony_service_name }}"
