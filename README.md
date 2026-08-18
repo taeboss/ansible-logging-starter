@@ -32,7 +32,7 @@ journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시�
 | 월 1회 시간 오차 점검 | 🟡 | 오차 점검 플레이북은 있지만 AWX/AAP·CI·cron 스케줄은 등록되지 않았다. |
 | 반기 네트워크 서비스 현황 점검 | 🟡 | LISTEN·연결 소켓 보고서는 생성하지만 정기 스케줄, 승인 목록 비교와 특이사항 판단은 없다. |
 | 관리 서버 원시 로그, 기타 서버 요약 로그 | ⚪ | 모든 서버를 단일 정책과 `raw` 변수로 통일했다. `log_profile`에 따른 실제 필터링은 구현되지 않았다. |
-| 가장 최근에 로그인한 사용자 | ✅ | discovery에서 `lastlog` 결과를 서버별 JSON으로 수집한다. |
+| 가장 최근에 로그인한 사용자 | ✅ | 계정 접근 정기점검에서 `lastlog` 결과를 날짜별 JSON으로 수집한다. |
 | 사용자별 로그인 시간 | ✅ | `lastlog`, `last -F` 결과와 wtmp/lastlog 감사 규칙을 사용한다. |
 | 사용자별 로그인·로그아웃 | ✅ | utmp, wtmp, btmp, lastlog 변경을 auditd가 기록하도록 설정한다. |
 | 접속 터미널 ID와 위치 | 🟡 | 세션 파일과 SSH `LogLevel VERBOSE`로 TTY·원격 IP를 확보할 수 있다. 물리 위치는 VPN/NAC/CMDB 연계가 필요하다. |
@@ -100,10 +100,19 @@ cd ansible-logging-starter
 ansible-galaxy collection install -r requirements.yml
 ansible-inventory --graph
 ansible-playbook playbooks/00-connectivity.yml
-ansible-playbook playbooks/01-discovery.yml
+ansible-playbook playbooks/01-register-server.yml
 ```
 
-현황 보고서는 `reports/<서버명>.json`에 저장됩니다.
+최초 등록정보는 `reports/inventory/<서버명>.json`에 최신본으로 저장됩니다.
+정책을 적용하기 전에는 읽기 전용 사전점검을 별도로 실행합니다.
+
+```bash
+ansible-playbook playbooks/02-security-preflight.yml --limit server-01
+```
+
+사전점검 보고서는 `reports/preflight/<날짜>/`에 실행 시각별로 보존됩니다.
+계정명, 접속 IP 및 보안 설정 메타데이터가 포함될 수 있으므로 `reports/`는
+Git에 커밋하지 않습니다.
 
 ## 파일럿 적용
 
@@ -136,6 +145,19 @@ ansible-playbook playbooks/10-apply-logging.yml
 - 매주: `playbooks/20-weekly-check.yml`
 - 매월: `playbooks/30-monthly-time-check.yml`
 - 반기: `playbooks/40-semiannual-network-review.yml`
+- 분기 또는 반기: `playbooks/50-account-access-review.yml`
+
+최초 등록과 정기점검의 역할은 분리되어 있습니다.
+
+| 단계 | 플레이북 | 보고서 |
+|---|---|---|
+| 접속 확인 | `00-connectivity.yml` | 없음 |
+| 최초 등록 | `01-register-server.yml` | `reports/inventory/` 최신본 |
+| 정책 적용 전 | `02-security-preflight.yml` | `reports/preflight/<날짜>/` |
+| 주간 로그 점검 | `20-weekly-check.yml` | `reports/weekly/<날짜>/` |
+| 월간 시간 점검 | `30-monthly-time-check.yml` | `reports/monthly-time/<날짜>/` |
+| 반기 네트워크 점검 | `40-semiannual-network-review.yml` | `reports/network/<날짜>/` |
+| 계정 접근 검토 | `50-account-access-review.yml` | `reports/account-access/<날짜>/` |
 
 실시간 비정상행위 알림은 Ansible이 아니라 중앙 로그/SIEM에서 구현해야
 합니다. Ansible은 audit/SSH/rsyslog 설정을 배포하고 정상 상태를 검증합니다.
