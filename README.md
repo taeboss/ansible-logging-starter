@@ -3,6 +3,13 @@
 CentOS/RHEL 계열과 Ubuntu 서버의 로그인 경고, 시간 동기화, auditd,
 journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시작점입니다.
 
+## 설계 문서
+
+- [결정사항과 구현 현황](docs/decisions-and-status.md)
+- [로깅 정책 매핑](docs/logging-policy-mapping.md)
+- [로그인 정책 설계 초안](docs/login-policy-design.md)
+- [구축 및 운영 절차](docs/operations-runbook.md)
+
 ## 적용 전 수정할 값
 
 1. `inventory/hosts.yml`의 예시 IP(`192.0.2.x`)를 실제 IP로 교체합니다.
