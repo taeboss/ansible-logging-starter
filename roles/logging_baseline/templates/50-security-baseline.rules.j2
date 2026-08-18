@@ -1,0 +1,28 @@
+## Managed by Ansible - do not edit manually
+
+## 로그인 및 세션 기록
+-w /var/run/utmp -p wa -k session
+-w /var/log/wtmp -p wa -k logins
+-w /var/log/btmp -p wa -k failed_logins
+-w /var/log/lastlog -p wa -k lastlog
+
+## 존재하는 중요 설정 및 자원
+{% for result in audit_path_stats.results %}
+{% if result.stat.exists %}
+-w {{ result.item.path }} -p {{ result.item.permissions }} -k {{ result.item.key }}
+{% endif %}
+{% endfor %}
+
+## 사용자 명령 실행: 최초 로그인 ID(auid) 기준
+{% if ansible_architecture in ['x86_64', 'aarch64'] %}
+-a always,exit -F arch=b64 -S execve -F auid>=1000 -F auid!=unset -k user_commands
+{% endif %}
+{% if ansible_architecture == 'x86_64' %}
+-a always,exit -F arch=b32 -S execve -F auid>=1000 -F auid!=unset -k user_commands
+{% endif %}
+
+## 권한 거부 접근 시도
+{% if ansible_architecture in ['x86_64', 'aarch64'] %}
+-a always,exit -F arch=b64 -S open,openat,creat,truncate,ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=unset -k access_denied
+-a always,exit -F arch=b64 -S open,openat,creat,truncate,ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=unset -k access_denied
+{% endif %}

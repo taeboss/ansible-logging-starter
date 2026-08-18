@@ -1,0 +1,24 @@
+---
+- name: Reload SSH
+  ansible.builtin.service:
+    name: "{{ ssh_service_name }}"
+    state: reloaded
+
+- name: Restart chrony
+  ansible.builtin.service:
+    name: "{{ chrony_service_name }}"
+    state: restarted
+
+- name: Restart journald
+  ansible.builtin.service:
+    name: systemd-journald
+    state: restarted
+
+- name: Load audit rules
+  ansible.builtin.command: augenrules --load
+  changed_when: true
+
+- name: Restart rsyslog
+  ansible.builtin.service:
+    name: rsyslog
+    state: restarted
