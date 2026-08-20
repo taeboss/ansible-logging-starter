@@ -28,7 +28,7 @@ journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시�
 | 로그인 전 시스템 정보 비노출 및 인가 사용자 경고 | ✅ | 최초 1회 + 조건부 반복 | 고정 문구를 `/etc/issue`, `/etc/issue.net`에 배포하고 SSH Banner를 설정한다. 문구에 호스트명·OS·버전 변수를 사용하지 않는다. |
 | 불필요한 로그인 안내문 제거 | 🟡 | 최초 1회 + 조건부 반복 | 사전 인증 Banner는 통제하지만 Ubuntu 동적 MOTD와 기타 프로그램별 안내문 제거는 구현하지 않았다. |
 | 로그 및 감사 기록의 관리자 전용 관리 | 🟡 | 최초 1회 + 조건부 반복 | `logadmin` 그룹, `/var/log/compliance`, audit 규칙 권한만 구현했다. 관리자 명단, 전체 로그 권한과 sudo 정책이 필요하다. |
-| chrony 기반 외부 NTP 동기화 | ✅ | 최초 1회 + 조건부 반복 | `time.kaist.ac.kr`, `time.bora.net`을 사용하도록 chrony를 설치·설정한다. Ubuntu/Debian은 apt 캐시를 갱신하고 기존 timesyncd/ntpd를 중지·비활성화·마스킹한다. 적용 전에 DNS와 UDP/123 응답을 확인해야 한다. |
+| chrony 기반 외부 NTP 동기화 | ✅ | 최초 1회 + 조건부 반복 | `time.kaist.ac.kr`, `time.nist.gov`을 사용하도록 chrony를 설치·설정한다. Ubuntu/Debian은 apt 캐시를 갱신하고 기존 timesyncd/ntpd를 중지·비활성화·마스킹한다. 적용 전에 DNS와 UDP/123 응답을 확인해야 한다. |
 | 월 1회 시간 오차 점검 | 🟡 | 정기 반복 | 오차 점검 플레이북은 있지만 AWX/AAP·CI·cron 스케줄은 등록되지 않았다. |
 | 반기 네트워크 서비스 현황 점검 | 🟡 | 정기 반복 | LISTEN·연결 소켓 보고서는 생성하지만 정기 스케줄, 승인 목록 비교와 특이사항 판단은 없다. |
 | 관리 서버 원시 로그, 기타 서버 요약 로그 | ⚪ | 최초 1회 + 조건부 반복 | 모든 서버를 단일 정책과 `raw` 변수로 통일했다. `log_profile`에 따른 실제 필터링은 구현되지 않았다. |
@@ -187,7 +187,7 @@ Git에서 정책 변경이 승인된 경우와 서버 신규 등록·재구축 �
 실시간 비정상행위 알림은 Ansible이 아니라 중앙 로그/SIEM에서 구현해야
 합니다. Ansible은 audit/SSH/rsyslog 설정을 배포하고 정상 상태를 검증합니다.
 
-NTP는 `time.kaist.ac.kr`, `time.bora.net`으로 설정되어 있습니다. 실제 적용
+NTP는 `time.kaist.ac.kr`, `time.nist.gov`으로 설정되어 있습니다. 실제 적용
 전에 대상 망에서 두 이름의 DNS 해석과 UDP/123 응답을 확인해야 합니다.
 CentOS/RHEL과 Ubuntu/Debian 모두 chrony를 사용하며, 기존
 `systemd-timesyncd`, `ntp`, `ntpd` 서비스가 있으면 중지·비활성화·마스킹합니다.

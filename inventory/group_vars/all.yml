@@ -20,7 +20,7 @@ log_filesystem_critical_percent: 90
 # 외부 NTP에 직접 연결하기보다 내부 NTP를 두는 구성이 권장됩니다.
 ntp_servers:
   - time.kaist.ac.kr
-  - time.bora.net
+  - time.nist.gov
 ntp_max_offset_seconds: 1.0
 
 # 중앙 로그/SIEM 확정 후 true로 변경합니다.
