@@ -94,6 +94,19 @@ audit 규칙 보완과 로그 보존정책 역시 상세 설계만 추가했으�
    유지합니다. 현재 TLS 템플릿은 암호화만 제공하고 CA 기반 서버 인증을
    수행하지 않습니다.
 
+## 실행 성격 구분
+
+- **최초 1회**: 신규 서버를 Ansible 관리 대상으로 등록하거나 기준 설정을
+  처음 적용할 때 실행한다.
+- **조건부 반복**: OS 재설치·업그레이드, 인증구조 변경, 정책 변수·템플릿 변경,
+  장애 점검 또는 재검증이 필요할 때 실행한다.
+- **정기 반복**: 로그와 운영 상태의 증적을 남기기 위해 정해진 주기로 실행한다.
+
+Ansible 플레이북은 같은 상태를 다시 적용해도 불필요한 변경을 만들지 않도록
+멱등성을 기준으로 작성한다. 따라서 `최초 1회`로 분류된 설정 플레이북도 정책이
+변경되면 다시 실행할 수 있으며, 실행 성격은 기술적인 실행 횟수 제한이 아니라
+권장 운영 주기를 의미한다.
+
 ## 최초 실행
 
 ```bash
@@ -149,17 +162,25 @@ ansible-playbook playbooks/10-apply-logging.yml
 - 반기: `playbooks/40-semiannual-network-review.yml`
 - 분기 또는 반기: `playbooks/50-account-access-review.yml`
 
-최초 등록과 정기점검의 역할은 분리되어 있습니다.
+최초 등록, 환경설정 변경과 정기 로그·상태 점검의 역할은 다음과 같이 분리되어
+있습니다.
 
-| 단계 | 플레이북 | 보고서 |
-|---|---|---|
-| 접속 확인 | `00-connectivity.yml` | 없음 |
-| 최초 등록 | `01-register-server.yml` | `reports/inventory/` 최신본 |
-| 정책 적용 전 | `02-security-preflight.yml` | `reports/preflight/<날짜>/` |
-| 주간 로그 점검 | `20-weekly-check.yml` | `reports/weekly/<날짜>/` |
-| 월간 시간 점검 | `30-monthly-time-check.yml` | `reports/monthly-time/<날짜>/` |
-| 반기 네트워크 점검 | `40-semiannual-network-review.yml` | `reports/network/<날짜>/` |
-| 계정 접근 검토 | `50-account-access-review.yml` | `reports/account-access/<날짜>/` |
+| 단계 | 플레이북 | 실행 성격 | 권장 실행 시점 | 보고서 |
+|---|---|---|---|---|
+| 접속 확인 | `00-connectivity.yml` | 조건부 반복 | 신규 등록, SSH·sudo·Python 변경, 접속 장애 시 | 없음 |
+| 최초 등록 | `01-register-server.yml` | 최초 1회 + 조건부 반복 | 신규 서버 등록, OS 재설치·업그레이드 후 | `reports/inventory/` 최신본 |
+| 정책 적용 전 | `02-security-preflight.yml` | 조건부 반복 | 로깅·로그인 정책을 적용하거나 변경하기 전 | `reports/preflight/<날짜>/` |
+| 로깅 기준 적용 | `10-apply-logging.yml` | 최초 1회 + 조건부 반복 | 최초 구축, 변수·템플릿·정책 변경 시 | 없음 |
+| 로그인 정책 적용(예정) | `11-apply-login-policy.yml` **미구현** | 최초 1회 + 조건부 반복 | Role 구현 후 최초 구축 및 정책 변경 시 | 없음 |
+| 주간 로그 점검 | `20-weekly-check.yml` | 정기 반복 | 매주 1회 이상 | `reports/weekly/<날짜>/` |
+| 월간 시간 점검 | `30-monthly-time-check.yml` | 정기 반복 | 매월 1회 이상 | `reports/monthly-time/<날짜>/` |
+| 반기 네트워크 점검 | `40-semiannual-network-review.yml` | 정기 반복 | 반기 1회 이상 | `reports/network/<날짜>/` |
+| 계정 접근 검토 | `50-account-access-review.yml` | 정기 반복 | 분기 또는 반기 | `reports/account-access/<날짜>/` |
+
+환경설정 적용 플레이북(`10`, 향후 `11`)은 스케줄로 무조건 반복 실행하기보다
+Git에서 정책 변경이 승인된 경우와 서버 신규 등록·재구축 시 실행한다. 반대로
+`20`~`50` 점검 플레이북은 설정을 변경하지 않고 결과를 누적하는 정기 실행
+대상이다.
 
 실시간 비정상행위 알림은 Ansible이 아니라 중앙 로그/SIEM에서 구현해야
 합니다. Ansible은 audit/SSH/rsyslog 설정을 배포하고 정상 상태를 검증합니다.
