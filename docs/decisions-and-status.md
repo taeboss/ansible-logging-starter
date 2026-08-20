@@ -11,7 +11,7 @@
 - 로깅 정책과 로그인/PAM 정책은 별도 플레이북과 Role로 관리한다.
 - 시간 동기화 클라이언트는 chrony로 통일한다.
 - 기존 `systemd-timesyncd`, `ntp`, `ntpd` 서비스는 중지·비활성화·마스킹한다.
-- 외부 NTP 소스는 `time.kaist.ac.kr`, `time.bora.net`을 우선 사용한다.
+- 외부 NTP 소스는 `time.kaist.ac.kr`, `time.nist.gov`을 우선 사용한다.
 - 모든 서버에 동일한 로깅 정책을 적용하며 현재 기본 프로필은 `raw`이다.
 - 설정 배포와 정기 검증은 Ansible이 담당한다.
 - 실시간 이벤트 분석과 경보는 중앙 로그/SIEM이 담당한다.
