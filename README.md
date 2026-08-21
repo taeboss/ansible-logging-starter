@@ -44,22 +44,24 @@ git pull --ff-only
 
 ### 3. Python 가상환경과 Ansible 설치
 
-시스템 기본 Python은 변경하지 않고 Python 3.12 가상환경에 현재 검증 버전인
+시스템 기본 Python은 변경하지 않습니다. 저장소 내부가 아닌 마스터노드 실행
+계정의 `~/.venvs/`에 Python 3.12 가상환경을 만들고 현재 검증 버전인
 `ansible-core 2.21.3`과 필요한 Collection을 설치합니다.
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
+mkdir -p ~/.venvs
+python3.12 -m venv ~/.venvs/ansible-core-2.21.3
+source ~/.venvs/ansible-core-2.21.3/bin/activate
 python -m pip install --upgrade pip
 python -m pip install 'ansible-core==2.21.3'
 ansible-galaxy collection install -r requirements.yml
 ```
 
-새 터미널에서는 저장소로 이동하여 가상환경을 활성화합니다.
+새 터미널에서는 마스터노드의 가상환경을 활성화한 뒤 저장소로 이동합니다.
 
 ```bash
+source ~/.venvs/ansible-core-2.21.3/bin/activate
 cd ansible-logging-starter
-source .venv/bin/activate
 ```
 
 설치 결과를 확인합니다.
