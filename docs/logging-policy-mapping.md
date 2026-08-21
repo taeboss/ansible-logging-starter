@@ -4,7 +4,7 @@
 
 | 정책 | Ansible 구현 | 현재 상태 | 외부 또는 사람의 역할 |
 |---|---|---|---|
-| 로그인 전 시스템 정보 비노출 | 고정 `/etc/issue`, `/etc/issue.net`, SSH Banner | 구현 | 승인 경고문 확정 |
+| 로그인 전 시스템 정보 비노출 | 고정 `/etc/issue`, `/etc/issue.net`, SSH Banner, 콘솔 `agetty --nohostname`, Ubuntu/Debian `DebianBanner no` | 구현 | OpenSSH 프로토콜 최소 식별정보는 예외로 관리하고 승인 경고문을 확정한다. |
 | 인가 사용자 전용 경고 | `login_warning_text` 변수 | 구현 | 법무·보안 문구 승인 |
 | 로그 관리자만 관리 | 그룹·파일 권한·sudo 정책 | 부분 구현 | 관리자 명단과 권한 승인 |
 | 공인 NTP 동기화 | chrony 템플릿과 서비스 | 구현 | 외부 서버 사용 승인·가용성 확인 |

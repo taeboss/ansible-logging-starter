@@ -73,6 +73,88 @@
     mode: "0644"
     backup: true
 
+- name: 콘솔 로그인 프로그램의 호스트명 비노출 지원 확인
+  ansible.builtin.command: /sbin/agetty --help
+  register: agetty_help
+  changed_when: false
+  check_mode: false
+  when: console_hide_hostname | bool
+
+- name: 콘솔 로그인 프로그램의 호스트명 비노출 지원 검증
+  ansible.builtin.assert:
+    that:
+      - "'--nohostname' in agetty_help.stdout"
+    fail_msg: 현재 agetty가 --nohostname 옵션을 지원하지 않습니다.
+  when: console_hide_hostname | bool
+
+- name: 콘솔 로그인 systemd drop-in 디렉터리 생성
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item }}.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - getty@.service
+    - serial-getty@.service
+  when: console_hide_hostname | bool
+
+- name: 일반 콘솔 로그인 호스트명 비노출 설정
+  ansible.builtin.template:
+    src: getty-no-hostname.conf.j2
+    dest: /etc/systemd/system/getty@.service.d/99-no-hostname.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: console_hide_hostname | bool
+  notify: Reload systemd units
+
+- name: 시리얼 콘솔 로그인 호스트명 비노출 설정
+  ansible.builtin.template:
+    src: serial-getty-no-hostname.conf.j2
+    dest: /etc/systemd/system/serial-getty@.service.d/99-no-hostname.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: console_hide_hostname | bool
+  notify: Reload systemd units
+
+- name: 비활성화된 콘솔 로그인 호스트명 비노출 설정 제거
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/getty@.service.d/99-no-hostname.conf
+    - /etc/systemd/system/serial-getty@.service.d/99-no-hostname.conf
+  when: not (console_hide_hostname | bool)
+  notify: Reload systemd units
+
+- name: 콘솔 로그인 systemd 설정 반영
+  ansible.builtin.meta: flush_handlers
+  when: not ansible_check_mode
+
+- name: 콘솔 로그인 유효 실행 명령 조회
+  ansible.builtin.command: >-
+    systemctl show {{ item }} --property=ExecStart --value
+  loop:
+    - getty@tty1.service
+    - serial-getty@ttyS0.service
+  register: console_getty_effective_commands
+  changed_when: false
+  when:
+    - console_hide_hostname | bool
+    - not ansible_check_mode
+
+- name: 콘솔 로그인 호스트명 비노출 유효 설정 검증
+  ansible.builtin.assert:
+    that:
+      - "'--nohostname' in item.stdout"
+    fail_msg: "{{ item.item }}의 유효 실행 명령에 --nohostname이 없습니다."
+  loop: "{{ console_getty_effective_commands.results | default([]) }}"
+  when:
+    - console_hide_hostname | bool
+    - not ansible_check_mode
+
 - name: SSH 경고문과 상세 인증 로그 설정
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
@@ -84,6 +166,43 @@
     - { regexp: '^\s*#?\s*Banner\s+', line: 'Banner /etc/issue.net' }
     - { regexp: '^\s*#?\s*LogLevel\s+', line: 'LogLevel VERBOSE' }
   notify: Reload SSH
+
+- name: Ubuntu/Debian SSH 배포판 버전 기존 설정 제거
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^\s*#?\s*DebianBanner\s+'
+    state: absent
+    backup: true
+    validate: /usr/sbin/sshd -t -f %s
+  when: ansible_os_family == 'Debian'
+  notify: Reload SSH
+
+- name: Ubuntu/Debian SSH 배포판 버전 비노출 설정
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    line: 'DebianBanner no'
+    insertbefore: '^\s*(Include|Match)\s+'
+    firstmatch: true
+    backup: true
+    validate: /usr/sbin/sshd -t -f %s
+  when: ansible_os_family == 'Debian'
+  notify: Reload SSH
+
+- name: SSH 유효 설정 조회
+  ansible.builtin.command: /usr/sbin/sshd -T
+  register: ssh_effective_configuration
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: 로그인 전 SSH 비노출 설정 검증
+  ansible.builtin.assert:
+    that:
+      - "'banner /etc/issue.net' in ssh_effective_configuration.stdout_lines"
+      - >-
+        ansible_os_family != 'Debian' or
+        'debianbanner no' in ssh_effective_configuration.stdout_lines
+    fail_msg: SSH Banner 또는 DebianBanner 유효 설정이 예상과 다릅니다.
+  when: not ansible_check_mode
 
 - name: chrony 설정 설치
   ansible.builtin.template:
