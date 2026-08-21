@@ -1,0 +1,48 @@
+---
+- name: Ubuntu/Debian 로컬 로그 패키지 설치 전 apt 캐시 갱신
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == 'Debian'
+
+- name: rsyslog 패키지 설치
+  ansible.builtin.package:
+    name: rsyslog
+    state: present
+
+- name: 로그 관리자 그룹 생성
+  ansible.builtin.group:
+    name: "{{ log_admin_group }}"
+    system: true
+    state: present
+
+- name: 준수 점검 로그 디렉터리 생성
+  ansible.builtin.file:
+    path: /var/log/compliance
+    state: directory
+    owner: root
+    group: "{{ log_admin_group }}"
+    mode: "0750"
+
+- name: journald drop-in 디렉터리 확인
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: journald 영구 보존 설정 설치
+  ansible.builtin.template:
+    src: journald-security.conf.j2
+    dest: /etc/systemd/journald.conf.d/60-security.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart journald
+
+- name: rsyslog 서비스 활성화
+  ansible.builtin.service:
+    name: rsyslog
+    enabled: true
+    state: started

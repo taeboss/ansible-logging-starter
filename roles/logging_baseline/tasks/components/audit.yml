@@ -1,0 +1,33 @@
+---
+- name: Ubuntu/Debian audit 패키지 설치 전 apt 캐시 갱신
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == 'Debian'
+
+- name: audit 패키지 설치
+  ansible.builtin.package:
+    name: "{{ audit_package_name }}"
+    state: present
+
+- name: audit 대상 경로 존재 여부 확인
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop: "{{ audit_sensitive_paths }}"
+  register: audit_path_stats
+
+- name: audit 규칙 설치
+  ansible.builtin.template:
+    src: 50-security-baseline.rules.j2
+    dest: /etc/audit/rules.d/50-security-baseline.rules
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  notify: Load audit rules
+
+- name: auditd 서비스 활성화
+  ansible.builtin.service:
+    name: auditd
+    enabled: true
+    state: started

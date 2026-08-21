@@ -1,5 +1,5 @@
 ---
-- name: 공통 로그인 경고 및 로깅 기준 적용
+- name: 전체 로그인 경고 및 로깅 기준 적용
   hosts: linux_servers
   gather_facts: true
   become: true

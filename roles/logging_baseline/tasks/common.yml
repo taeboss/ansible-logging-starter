@@ -1,0 +1,16 @@
+---
+- name: 지원 OS 계열 확인
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family in ['RedHat', 'Debian']
+    fail_msg: >-
+      지원하지 않는 OS입니다:
+      {{ ansible_distribution }} {{ ansible_distribution_version }}
+
+- name: OS별 서비스 및 설정 경로 결정
+  ansible.builtin.set_fact:
+    ssh_service_name: "{{ 'ssh' if ansible_os_family == 'Debian' else 'sshd' }}"
+    chrony_service_name: "{{ 'chrony' if ansible_os_family == 'Debian' else 'chronyd' }}"
+    chrony_service_unit: "{{ 'chrony.service' if ansible_os_family == 'Debian' else 'chronyd.service' }}"
+    chrony_config_path: "{{ '/etc/chrony/chrony.conf' if ansible_os_family == 'Debian' else '/etc/chrony.conf' }}"
+    audit_package_name: "{{ 'auditd' if ansible_os_family == 'Debian' else 'audit' }}"
