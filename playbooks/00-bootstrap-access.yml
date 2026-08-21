@@ -1,0 +1,113 @@
+---
+- name: 기존 관리자 계정으로 Ansible 관리계정 구성
+  hosts: "{{ bootstrap_hosts | default('bootstrap_servers') }}"
+  gather_facts: false
+  become: true
+  serial: "{{ bootstrap_batch_size | default(10) }}"
+  max_fail_percentage: 0
+  any_errors_fatal: true
+
+  vars:
+    ansible_user: "{{ bootstrap_initial_user }}"
+    bootstrap_managed_user: ansible-admin
+    bootstrap_public_key_file: "{{ lookup('env', 'HOME') }}/.ssh/ansible_ed25519.pub"
+    bootstrap_private_key_file: "{{ lookup('env', 'HOME') }}/.ssh/ansible_ed25519"
+
+  pre_tasks:
+    - name: 컨트롤 노드의 Ansible SSH 키 확인
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ bootstrap_public_key_file }}"
+        - "{{ bootstrap_private_key_file }}"
+      register: bootstrap_key_files
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: 컨트롤 노드의 Ansible SSH 키 검증
+      ansible.builtin.assert:
+        that:
+          - bootstrap_key_files.results[0].stat.exists
+          - bootstrap_key_files.results[1].stat.exists
+          - bootstrap_key_files.results[0].stat.isreg
+          - bootstrap_key_files.results[1].stat.isreg
+          - bootstrap_key_files.results[1].stat.mode == '0600'
+        fail_msg: >-
+          Ansible SSH 키가 없거나 개인키 권한이 0600이 아닙니다:
+          {{ bootstrap_private_key_file }}
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: 대상 서버 Python 3 확인
+      ansible.builtin.raw: command -v python3
+      register: bootstrap_python3
+      changed_when: false
+      failed_when: false
+
+    - name: 대상 서버 Python 3 검증
+      ansible.builtin.assert:
+        that:
+          - bootstrap_python3.rc == 0
+        fail_msg: >-
+          Python 3가 없습니다. 기존 관리 절차로 Python 3를 설치한 뒤
+          bootstrap을 다시 실행하십시오.
+
+  roles:
+    - role: bootstrap_access
+
+  tasks:
+    - name: 새 Ansible 관리계정 접속정보로 전환
+      ansible.builtin.set_fact:
+        ansible_user: "{{ bootstrap_managed_user }}"
+        ansible_ssh_private_key_file: "{{ bootstrap_private_key_file }}"
+        ansible_ssh_extra_args: >-
+          -o PreferredAuthentications=publickey
+          -o PasswordAuthentication=no
+          -o KbdInteractiveAuthentication=no
+
+    - name: 기존 관리자 SSH 연결 종료
+      ansible.builtin.meta: reset_connection
+
+    - name: 새 관리계정으로 시스템 정보 수집
+      ansible.builtin.setup:
+
+    - name: bootstrap 보고서 디렉터리 생성
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../reports/bootstrap/{{ ansible_date_time.date }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: 새 관리계정 Python 모듈 실행 확인
+      ansible.builtin.ping:
+
+    - name: 새 관리계정 비대화형 sudo 확인
+      ansible.builtin.command: id
+      become: true
+      register: bootstrap_sudo_id
+      changed_when: false
+      failed_when: bootstrap_sudo_id.stdout is not search('uid=0')
+
+    - name: 서버별 bootstrap 검증 결과 저장
+      ansible.builtin.copy:
+        dest: "{{ playbook_dir }}/../reports/bootstrap/{{ ansible_date_time.date }}/{{ inventory_hostname }}-{{ ansible_date_time.time | regex_replace(':', '') }}.json"
+        mode: "0600"
+        content: >-
+          {{
+            {
+              'verified_at': ansible_date_time.iso8601,
+              'inventory_hostname': inventory_hostname,
+              'ansible_host': ansible_host | default(inventory_hostname),
+              'managed_user': bootstrap_managed_user,
+              'distribution': ansible_distribution,
+              'distribution_version': ansible_distribution_version,
+              'python_version': ansible_python_version,
+              'sudo_identity': bootstrap_sudo_id.stdout
+            } | to_nice_json
+          }}
+      delegate_to: localhost
+      become: false

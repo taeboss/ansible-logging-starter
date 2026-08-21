@@ -3,29 +3,40 @@
 ## 관리 구조
 
 ```text
-Ansible 마스터의 ansible-admin
+Ansible 컨트롤 노드의 실행 사용자
 ├── SSH 개인키 보관
-└── 대상 서버 20대의 ansible-admin으로 공개키 접속
+└── 대상 서버의 ansible-admin으로 공개키 접속
     └── sudo를 통해 정책 적용
 ```
 
 개인키는 마스터에만 보관하고 공개키만 대상 서버의 `authorized_keys`에 둔다.
+컨트롤 노드에 `ansible-admin` 로컬 계정을 별도로 만들 필요는 없다.
 
 ## 마스터 사전조건
 
-- Git, Ansible, Python 3
-- `ansible.posix` Collection
-- `ansible-admin` 실행 계정
+- 지원 중인 최신 Rocky Linux 9 마이너 릴리스
+- Git, Ansible, Python 3.12 이상
+- `ansible-core 2.21.3`
+- `ansible.posix 2.2.2` Collection
 - 권한 `0600`의 SSH 개인키
 - 검증된 대상 SSH 호스트 키
 - 대상 TCP/22 네트워크 접근
 
-## 대상 서버 사전조건
+## bootstrap 전 대상 서버 사전조건
 
-- `ansible-admin` 계정과 홈 디렉터리
-- 마스터 공개키가 등록된 `authorized_keys`
-- 비대화형 sudo 또는 안전하게 관리되는 become 자격증명
-- SSH와 호환 가능한 Python
+- SSH 접속 가능한 기존 관리자 계정
+- 해당 계정의 sudo/root 권한과 안전하게 관리되는 자격증명
+- Python 3
+- 삭제·잠금하지 않은 콘솔 또는 별도 복구 계정
+
+bootstrap 완료 후에는 다음 항목이 구성된다.
+
+- `ansible-admin` 시스템 계정과 홈 디렉터리
+- 컨트롤 노드 공개키가 등록된 `authorized_keys`
+- 검증된 `/etc/sudoers.d/ansible-admin` 비대화형 sudo
+
+정책 적용 단계에는 다음 접근 조건도 필요하다.
+
 - 패키지 저장소 접근
 - 외부 NTP UDP/123 및 DNS 접근
 
@@ -36,10 +47,60 @@ CentOS 7과 Ubuntu 16.04는 최신 Ansible의 대상 Python 지원 범위에서 
 
 ```bash
 ansible-galaxy collection install -r requirements.yml
+```
+
+### 방식 1: hosts.yml과 서버별 Vault
+
+서버 수가 많고 서버별 자격증명을 안전하게 준비할 수 있을 때 사용한다.
+
+```bash
+cp inventory/bootstrap/hosts.example.yml inventory/bootstrap/hosts.yml
+# 서버별 IP와 bootstrap_initial_user 입력
+
+mkdir -p inventory/bootstrap/host_vars/server-001
+ansible-vault create inventory/bootstrap/host_vars/server-001/vault.yml
+
+ansible-playbook -i inventory/bootstrap/hosts.yml \
+  playbooks/00-bootstrap-access.yml --ask-vault-pass
+```
+
+각 `vault.yml`에는 `ansible_password`, `ansible_become_password`만 저장한다.
+모든 파일은 동일한 Vault 암호로 암호화하며 Vault 암호와 파일의 평문 복사본은
+Git에 저장하지 않는다.
+
+### 방식 2: 인벤토리 파일 없이 IP 한 대씩 실행
+
+자격증명을 파일에 보관하지 않을 때 사용한다. IP 뒤의 쉼표는 필수다.
+
+```bash
+ansible-playbook -i '192.0.2.101,' \
+  playbooks/00-bootstrap-access.yml \
+  -e bootstrap_hosts=all \
+  -e bootstrap_initial_user=기존관리자계정 \
+  --ask-pass --ask-become-pass
+```
+
+한 서버의 새 `ansible-admin` 재접속 검증까지 성공한 뒤 해당 서버를 운영용
+`inventory/hosts.yml`에 추가한다. 이후 다음 서버를 같은 방식으로 처리한다.
+
+### bootstrap 이후 공통 순서
+
+```bash
 ansible-inventory --graph
 ansible-playbook playbooks/00-connectivity.yml
 ansible-playbook playbooks/01-register-server.yml
 ```
+
+bootstrap은 기존 관리자 접속을 `ansible-admin` 전용 공개키 접속으로 전환하는
+최초 1회 작업이다. 기본 10대 배치마다 계정·키·sudoers 구성 직후 기존 SSH
+연결을 종료하고 새 계정의 공개키 전용 접속, Python 모듈과 `sudo id`를 모두
+검증한다. 한 대라도 실패하면 다음 배치를 시작하지 않는다. 검증 결과는
+`reports/bootstrap/<날짜>/`에 남는다.
+
+hosts.yml 방식은 서버별 Vault 또는 AWX·AAP 자격증명을 사용한다. IP 직접 지정
+방식은 암호를 프롬프트에 입력하므로 파일에 남기지 않지만 서버마다 반복해야
+한다. 기존 관리자 계정은 전체 정책 적용과 복구경로 검증이 끝나기 전에 삭제하지
+않는다.
 
 최초 등록정보를 검토한 뒤 파일럿 한 대의 보안 사전점검을 수행한다.
 
@@ -90,6 +151,8 @@ apt 캐시를 갱신하고, 기존 `systemd-timesyncd`, `ntp`, `ntpd` unit이 �
 ## 안전 원칙
 
 - 실제 IP, 비밀번호, 개인키와 Vault 비밀번호를 Git에 커밋하지 않는다.
+- bootstrap 전 기존 관리자 sudo와 별도 콘솔 복구경로를 확인한다.
+- bootstrap 검증 성공 전 기존 관리자 계정을 삭제하거나 잠그지 않는다.
 - `--check --diff` 후에도 파일럿 실제 적용을 별도로 수행한다.
 - SSH/PAM 변경 시 기존 관리자 세션과 콘솔 복구 경로를 유지한다.
 - root SSH 및 비밀번호 인증 차단은 공개키·sudo·새 SSH 세션 검증 후 시행한다.

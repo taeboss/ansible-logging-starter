@@ -1,0 +1,8 @@
+---
+bootstrap_managed_user: ansible-admin
+bootstrap_managed_group: "{{ bootstrap_managed_user }}"
+bootstrap_managed_shell: /bin/bash
+bootstrap_public_key_file: "{{ lookup('env', 'HOME') }}/.ssh/ansible_ed25519.pub"
+bootstrap_authorized_keys:
+  - "{{ lookup('file', bootstrap_public_key_file) }}"
+bootstrap_sudoers_path: "/etc/sudoers.d/{{ bootstrap_managed_user }}"

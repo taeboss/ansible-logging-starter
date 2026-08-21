@@ -1,0 +1,44 @@
+---
+- name: bootstrap 입력값 검증
+  ansible.builtin.assert:
+    that:
+      - bootstrap_managed_user is match('^[a-z_][a-z0-9_-]*[$]?$')
+      - bootstrap_authorized_keys | length > 0
+      - >-
+        bootstrap_authorized_keys |
+        select('match', '^(ssh-ed25519|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh.com|ssh-rsa) ') |
+        list | length == bootstrap_authorized_keys | length
+    fail_msg: 관리계정 이름 또는 승인된 SSH 공개키가 올바르지 않습니다.
+
+- name: Ansible 관리그룹 생성
+  ansible.builtin.group:
+    name: "{{ bootstrap_managed_group }}"
+    system: true
+    state: present
+
+- name: Ansible 관리계정 생성
+  ansible.builtin.user:
+    name: "{{ bootstrap_managed_user }}"
+    group: "{{ bootstrap_managed_group }}"
+    shell: "{{ bootstrap_managed_shell }}"
+    create_home: true
+    system: true
+    password_lock: true
+    state: present
+
+- name: 승인된 Ansible 공개키 등록
+  ansible.posix.authorized_key:
+    user: "{{ bootstrap_managed_user }}"
+    key: "{{ bootstrap_authorized_keys | join('\n') }}"
+    state: present
+    exclusive: true
+    manage_dir: true
+
+- name: Ansible 관리계정 sudoers 설정
+  ansible.builtin.template:
+    src: ansible-admin-sudoers.j2
+    dest: "{{ bootstrap_sudoers_path }}"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s

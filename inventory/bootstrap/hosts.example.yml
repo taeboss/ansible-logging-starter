@@ -1,0 +1,13 @@
+---
+# 이 파일을 hosts.yml로 복사한 뒤 각 서버의 기존 관리자 계정만 입력합니다.
+# 비밀번호와 개인키는 이 파일이나 Git에 저장하지 않습니다.
+all:
+  children:
+    bootstrap_servers:
+      hosts:
+        server-001:
+          ansible_host: 192.0.2.101
+          bootstrap_initial_user: REPLACE_WITH_EXISTING_ADMIN
+        server-002:
+          ansible_host: 192.0.2.102
+          bootstrap_initial_user: REPLACE_WITH_EXISTING_ADMIN
