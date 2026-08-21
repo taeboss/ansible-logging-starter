@@ -1,0 +1,4 @@
+# Managed by Ansible - do not edit manually
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --nohostname -o '-p -- \\u' --keep-baud 115200,57600,38400,9600 - $TERM

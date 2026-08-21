@@ -29,6 +29,8 @@
 - 정책 적용 전 SSH·PAM·계정·audit·로그 용량 사전점검
 - `/etc/issue`, `/etc/issue.net` 경고문
 - SSH Banner와 `LogLevel VERBOSE`
+- 일반·시리얼 콘솔의 호스트명 비노출
+- Ubuntu/Debian SSH 배포판 버전 정보 비노출
 - chrony 패키지, 설정 및 서비스 관리
 - Ubuntu/Debian apt 캐시 갱신과 기존 시간 동기화 서비스 비활성화
 - auditd 설치와 기본 감사 규칙

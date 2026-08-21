@@ -25,7 +25,7 @@ journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시�
 
 | 정책 항목 | 상태 | 실행 성격 | 현재 소스 기준 설명 |
 |---|---:|---|---|
-| 로그인 전 시스템 정보 비노출 및 인가 사용자 경고 | ✅ | 최초 1회 + 조건부 반복 | 고정 문구를 `/etc/issue`, `/etc/issue.net`에 배포하고 SSH Banner를 설정한다. 문구에 호스트명·OS·버전 변수를 사용하지 않는다. |
+| 로그인 전 시스템 정보 비노출 및 인가 사용자 경고 | ✅ | 최초 1회 + 조건부 반복 | 고정 문구를 `/etc/issue`, `/etc/issue.net`에 배포하고 SSH Banner를 설정한다. 일반·시리얼 콘솔은 `agetty --nohostname`으로 호스트명을 숨기고 Ubuntu/Debian SSH는 `DebianBanner no`로 배포판 버전 정보를 숨긴다. OpenSSH 프로토콜의 최소 식별정보는 남는다. |
 | 불필요한 로그인 안내문 제거 | 🟡 | 최초 1회 + 조건부 반복 | 사전 인증 Banner는 통제하지만 Ubuntu 동적 MOTD와 기타 프로그램별 안내문 제거는 구현하지 않았다. |
 | 로그 및 감사 기록의 관리자 전용 관리 | 🟡 | 최초 1회 + 조건부 반복 | `logadmin` 그룹, `/var/log/compliance`, audit 규칙 권한만 구현했다. 관리자 명단, 전체 로그 권한과 sudo 정책이 필요하다. |
 | chrony 기반 외부 NTP 동기화 | ✅ | 최초 1회 + 조건부 반복 | `time.kaist.ac.kr`, `time.nist.gov`을 사용하도록 chrony를 설치·설정한다. Ubuntu/Debian은 apt 캐시를 갱신하고 기존 timesyncd/ntpd를 중지·비활성화·마스킹한다. 적용 전에 DNS와 UDP/123 응답을 확인해야 한다. |

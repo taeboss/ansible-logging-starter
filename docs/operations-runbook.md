@@ -59,8 +59,12 @@ ansible-playbook playbooks/10-apply-logging.yml \
   --limit server-01
 ```
 
-새 SSH 세션, `sudo -n id`, `sshd -t`, `chronyc tracking`, `auditctl -s`,
-`auditctl -l`을 확인한 후 전체 적용한다. 전체 플레이북은 5대씩 처리한다.
+새 SSH 세션, `sudo -n id`, `sshd -t`, `sshd -T`의 `banner`와 Ubuntu/Debian의
+`debianbanner`, 새 일반·시리얼 콘솔의 호스트명 비노출, `chronyc tracking`,
+`auditctl -s`, `auditctl -l`을 확인한 후 전체 적용한다. 전체 플레이북은 5대씩
+처리한다. Role은 콘솔 사용자를 강제로 종료하지 않고 systemd 설정만 다시
+읽으므로, 이미 대기 중인 콘솔은 로그아웃 후 새 getty가 시작되거나 재부팅된 뒤
+변경된 로그인 프롬프트가 표시된다.
 
 시간 동기화는 모든 배포판에서 chrony로 통일한다. Role은 Ubuntu/Debian의
 apt 캐시를 갱신하고, 기존 `systemd-timesyncd`, `ntp`, `ntpd` unit이 있으면

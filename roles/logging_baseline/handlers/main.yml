@@ -4,6 +4,10 @@
     name: "{{ ssh_service_name }}"
     state: reloaded
 
+- name: Reload systemd units
+  ansible.builtin.systemd:
+    daemon_reload: true
+
 - name: Restart chrony
   ansible.builtin.service:
     name: "{{ chrony_service_name }}"

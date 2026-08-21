@@ -1,6 +1,8 @@
 ---
 log_profile: raw
 
+console_hide_hostname: true
+
 legacy_time_services:
   - systemd-timesyncd.service
   - ntp.service
