@@ -12,6 +12,143 @@ journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시�
 - [로그인 정책 설계 초안](docs/login-policy-design.md)
 - [구축 및 운영 절차](docs/operations-runbook.md)
 
+## Ansible 마스터노드 최초 구성
+
+아래 작업은 Ansible을 실행할 Rocky Linux 9 마스터노드에서 수행합니다. 별도의
+로컬 `ansible-admin` 계정은 필요하지 않으며 저장소와 SSH 개인키를 소유한 현재
+실행 계정으로 Ansible을 실행합니다.
+
+### 1. Rocky Linux 9 업데이트와 기본 패키지 설치
+
+[Rocky Linux 공식 릴리스 정책](https://docs.rockylinux.org/latest/releases/)에
+따라 최신 마이너 릴리스만 지원됩니다. 마스터 후보가 Rocky 9.2라면 바로
+사용하지 말고 유지보수 시간에 최신 Rocky 9 마이너로 먼저 업데이트합니다.
+현재 버전과 업데이트 대상을 확인한 뒤 진행합니다.
+
+```bash
+cat /etc/rocky-release
+sudo dnf check-update
+```
+
+업데이트 영향과 복구 방법을 확인한 뒤 실행합니다. 완료 후 재부팅하고 다시
+접속합니다.
+
+```bash
+sudo dnf upgrade --refresh -y
+sudo reboot
+```
+
+재접속 후 버전과 저장소를 확인하고 필요한 패키지를 설치합니다.
+
+```bash
+cat /etc/rocky-release
+sudo dnf repolist
+sudo dnf install -y git python3.12 python3.12-pip openssh-clients
+python3.12 --version
+```
+
+Rocky 9.2를 업데이트할 수 없다면 호스트에 현재 Ansible을 직접 설치하지 말고
+Python 3.12 이상이 포함된 승인된 Ansible Execution Environment를 별도로
+사용합니다.
+
+### 2. 저장소 clone
+
+```bash
+git clone https://github.com/taeboss/ansible-logging-starter.git
+cd ansible-logging-starter
+git switch main
+git pull --ff-only
+```
+
+이미 clone한 저장소라면 `cd ansible-logging-starter` 이후 `git pull --ff-only`만
+실행합니다. 운영 중에는 검토되지 않은 로컬 수정이 섞이지 않았는지
+`git status --short`로 확인합니다.
+
+### 3. Python 가상환경과 Ansible 설치
+
+프로젝트별 가상환경을 사용하면 마스터노드의 시스템 Python과 Ansible 버전을
+분리할 수 있습니다. 현재 검증 기준은 `ansible-core 2.21.3`이며 마스터노드에
+Python 3.12 이상이 필요합니다. 앞에서 설치한 버전을 확인합니다.
+
+```bash
+python3.12 --version
+```
+
+3.12보다 낮으면 진행하지 말고 조직에서 승인한 Python 3.12 이상 실행환경이나
+Ansible Execution Environment를 준비합니다. 버전별 요구사항은
+[Ansible 공식 지원표](https://docs.ansible.com/projects/ansible/latest/reference_appendices/release_and_maintenance.html)에서 확인합니다.
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install 'ansible-core==2.21.3'
+ansible-galaxy collection install -r requirements.yml
+```
+
+새 터미널을 열 때마다 저장소에서 다음 명령으로 가상환경을 활성화합니다.
+
+```bash
+cd ansible-logging-starter
+source .venv/bin/activate
+```
+
+설치 결과를 확인합니다.
+
+```bash
+ansible --version
+ansible-galaxy collection list ansible.posix
+ansible-playbook playbooks/00-bootstrap-access.yml --syntax-check \
+  -i inventory/bootstrap/hosts.example.yml
+```
+
+### 4. Ansible 전용 SSH 키 생성
+
+기존 키가 있는지 먼저 확인합니다. 파일이 이미 있으면 `ssh-keygen`으로
+덮어쓰지 말고 기존 키의 관리 주체와 사용 여부를 확인합니다.
+
+```bash
+ls -l ~/.ssh/ansible_ed25519 ~/.ssh/ansible_ed25519.pub
+```
+
+키가 없을 때만 생성합니다.
+
+```bash
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+ssh-keygen -t ed25519 -f ~/.ssh/ansible_ed25519 -C ansible-admin
+chmod 600 ~/.ssh/ansible_ed25519
+chmod 644 ~/.ssh/ansible_ed25519.pub
+ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
+```
+
+개인키는 마스터노드에만 보관합니다. 대상 서버에는 bootstrap 플레이북이
+공개키만 배포합니다.
+
+### 5. 대상 서버 SSH 호스트 키 검증
+
+마스터노드에서 수집한 지문을 대상 서버 콘솔에서 확인한 지문과 비교한 뒤에만
+`known_hosts`에 등록합니다. 아래 IP는 실제 대상 IP로 바꿉니다.
+
+대상 서버 콘솔:
+
+```bash
+sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+마스터노드:
+
+```bash
+ssh-keyscan -t ed25519 192.0.2.101 > /tmp/192.0.2.101-ed25519.pub
+ssh-keygen -lf /tmp/192.0.2.101-ed25519.pub
+# 콘솔 지문과 일치하는지 확인한 뒤 등록
+ssh-keyscan -H -t ed25519 192.0.2.101 >> ~/.ssh/known_hosts
+ssh-keygen -F 192.0.2.101
+```
+
+서버별로 같은 절차를 반복합니다. 확인 없이 `StrictHostKeyChecking=no`를 사용하지
+않습니다.
+
 ## 정책 적용 현황 요약
 
 이 표의 상태는 정책상 가능한 기능이 아니라 **현재 저장소의 소스코드 기준**이다.
@@ -86,8 +223,11 @@ audit 규칙 보완과 로그 보존정책 역시 상세 설계만 추가했으�
 
 ## 적용 전 수정할 값
 
-1. `inventory/hosts.yml`의 예시 IP(`192.0.2.x`)를 실제 IP로 교체합니다.
-2. 모든 대상 서버를 단일 `linux_servers` 그룹에 넣습니다.
+1. 최초 관리계정 구성은 `inventory/bootstrap/hosts.yml`·Vault 일괄 방식과
+   IP 직접 지정 방식 중에서 선택합니다. 일괄 방식의 호스트·자격증명 파일은
+   Git에서 제외됩니다.
+2. `inventory/hosts.yml`의 예시 IP(`192.0.2.x`)를 실제 IP로 교체하고 모든
+   대상 서버를 단일 `linux_servers` 그룹에 넣습니다.
 3. `inventory/group_vars/all.yml`에서 SSH 개인키 경로, 경고문,
    NTP 서버, 보존 기준을 확정합니다.
 4. 중앙 로그/SIEM이 준비되기 전에는 `central_logging_enabled: false`를
@@ -111,15 +251,97 @@ Ansible 플레이북은 같은 상태를 다시 적용해도 불필요한 변경
 변경하지 않는다. 중앙 Ansible 정책 개정이나 서버 재구축 시에는 새 기준을 다시
 배포할 수 있지만 이를 평상시 조건부 반복 작업으로 분류하지 않는다.
 
-## 최초 실행
+## 기존 서버 bootstrap 실행
+
+기존 서버를 처음 Ansible 관리 대상으로 전환할 때는 기존 관리자 계정으로
+접속하여 `ansible-admin`, 전용 공개키와 비대화형 sudo를 구성합니다. Rocky
+마스터노드에도 같은 이름의 로컬 계정을 만들 필요는 없습니다.
+먼저 위의 마스터노드 최초 구성을 완료합니다.
+
+bootstrap 진입 방법은 다음 두 가지 중에서 선택합니다.
+
+### 방식 1: hosts.yml과 서버별 Vault로 일괄 실행
+
+서버 IP와 기존 관리자 계정명은 `hosts.yml`에, 서로 다른 SSH·sudo 암호는
+서버별 Ansible Vault 파일에 저장합니다. `hosts.yml`과 `host_vars/`는 모두
+Git에서 제외됩니다.
 
 ```bash
-cd ansible-logging-starter
-ansible-galaxy collection install -r requirements.yml
+cp inventory/bootstrap/hosts.example.yml inventory/bootstrap/hosts.yml
+# hosts.yml에 서버 IP와 bootstrap_initial_user 입력
+
+mkdir -p inventory/bootstrap/host_vars/server-001
+ansible-vault create inventory/bootstrap/host_vars/server-001/vault.yml
+```
+
+Vault 파일에는 해당 서버의 기존 관리자 자격증명만 입력합니다.
+
+```yaml
+ansible_password: "기존 관리자 SSH 암호"
+ansible_become_password: "기존 관리자 sudo 암호"
+```
+
+모든 서버의 Vault 파일을 같은 Vault 암호로 만들면 다음 명령 한 번으로
+서버마다 서로 다른 자격증명을 사용하여 기본 10대씩 처리할 수 있습니다.
+
+```bash
+ansible-playbook -i inventory/bootstrap/hosts.yml \
+  playbooks/00-bootstrap-access.yml --ask-vault-pass
+```
+
+### 방식 2: hosts.yml 없이 IP를 한 대씩 직접 지정
+
+서버 암호를 파일에 보관하지 않을 때 사용합니다. 마지막 쉼표가 있어야 IP를
+인라인 인벤토리로 인식합니다. 암호는 명령 인자에 넣지 않고 프롬프트에 직접
+입력합니다.
+
+```bash
+ansible-playbook -i '192.0.2.101,' \
+  playbooks/00-bootstrap-access.yml \
+  -e bootstrap_hosts=all \
+  -e bootstrap_initial_user=기존관리자계정 \
+  --ask-pass --ask-become-pass
+```
+
+이 방식은 서버마다 반복 실행합니다. 성공한 서버는 이후 운영용
+`inventory/hosts.yml`에 추가하고, 그때부터 `ansible-admin`과 전용 공개키를
+사용합니다.
+
+플레이북은 새 `ansible-admin` 공개키 접속과 `sudo`까지 자동 검증합니다. 별도로
+다시 확인하려면 다음 명령을 실행합니다.
+
+```bash
+ssh -i ~/.ssh/ansible_ed25519 ansible-admin@192.0.2.101 \
+  'id; sudo -n id'
+```
+
+첫 번째 `id`는 `ansible-admin`, 두 번째 `sudo -n id`는 `uid=0(root)`가
+출력되어야 합니다. 생성된 보고서도 확인합니다.
+
+```bash
+find reports/bootstrap -type f -print
+```
+
+bootstrap 완료 후 공통 운영 흐름을 실행합니다.
+
+```bash
 ansible-inventory --graph
 ansible-playbook playbooks/00-connectivity.yml
 ansible-playbook playbooks/01-register-server.yml
 ```
+
+기존 관리자 계정이 이미 SSH 키와 비대화형 sudo를 사용한다면 암호 옵션을
+생략할 수 있습니다. 비밀번호·개인키와 Vault 암호는 인벤토리나 Git에 기록하지
+않습니다.
+
+bootstrap은 기본 10대 단위로 실행합니다. 현재 배치에 아래 항목을 구성한 뒤
+같은 배치에서 새 계정의 공개키 전용 SSH 접속·Python·비대화형 sudo를 즉시
+검증합니다. 한 대라도 실패하면 다음 배치를 시작하지 않습니다. 결과는
+`reports/bootstrap/<날짜>/`에 저장됩니다.
+
+- 시스템 계정·그룹 `ansible-admin`
+- 컨트롤 노드의 승인된 SSH 공개키
+- `/etc/sudoers.d/ansible-admin`의 `NOPASSWD` sudo 권한
 
 최초 등록정보는 `reports/inventory/<서버명>.json`에 최신본으로 저장됩니다.
 정책을 적용하기 전에는 읽기 전용 사전점검을 별도로 실행합니다.
@@ -171,6 +393,7 @@ ansible-playbook playbooks/10-apply-logging.yml
 
 | 단계 | 플레이북 | 실행 성격 | 권장 실행 시점 | 보고서 |
 |---|---|---|---|---|
+| 관리계정 bootstrap | `00-bootstrap-access.yml` | 최초 1회 | 기존 서버를 Ansible 관리 대상으로 전환할 때 | `reports/bootstrap/<날짜>/` |
 | 접속 확인 | `00-connectivity.yml` | 조건부 반복 | 신규 등록, SSH·sudo·Python 변경, 접속 장애 시 | 없음 |
 | 최초 등록 | `01-register-server.yml` | 최초 1회 | 신규 서버 등록 시 | `reports/inventory/` 최신본 |
 | 정책 적용 전 | `02-security-preflight.yml` | 최초 1회 | 최초 로깅·로그인 정책 적용 전 | `reports/preflight/<날짜>/` |

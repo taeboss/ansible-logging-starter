@@ -11,3 +11,7 @@ private_keys/
 *.pem
 *.key
 *~
+
+# 기존 관리자 계정 등 파일럿별 접속정보
+inventory/bootstrap/hosts.yml
+inventory/bootstrap/host_vars/
