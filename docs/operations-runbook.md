@@ -87,8 +87,8 @@ ansible-playbook -i '192.0.2.101,' \
 
 ```bash
 ansible-inventory --graph
-ansible-playbook playbooks/00-connectivity.yml
-ansible-playbook playbooks/01-register-server.yml
+ansible-playbook playbooks/01-connectivity.yml
+ansible-playbook playbooks/02-register-server.yml
 ```
 
 bootstrap은 기존 관리자 접속을 `ansible-admin` 전용 공개키 접속으로 전환하는
@@ -105,7 +105,7 @@ hosts.yml 방식은 서버별 Vault 또는 AWX·AAP 자격증명을 사용한다
 최초 등록정보를 검토한 뒤 파일럿 한 대의 보안 사전점검을 수행한다.
 
 ```bash
-ansible-playbook playbooks/02-security-preflight.yml \
+ansible-playbook playbooks/03-security-preflight.yml \
   --limit server-01
 ```
 
@@ -113,19 +113,44 @@ ansible-playbook playbooks/02-security-preflight.yml \
 audit immutable 상태와 로그 여유 공간을 확인한 뒤 파일럿에 적용한다.
 
 ```bash
-ansible-playbook playbooks/10-apply-logging.yml \
+ansible-playbook playbooks/10-01-apply-login-warning.yml \
   --limit server-01 --check --diff
 
-ansible-playbook playbooks/10-apply-logging.yml \
+ansible-playbook playbooks/10-01-apply-login-warning.yml \
   --limit server-01
 ```
 
 새 SSH 세션, `sudo -n id`, `sshd -t`, `sshd -T`의 `banner`와 Ubuntu/Debian의
-`debianbanner`, 새 일반·시리얼 콘솔의 호스트명 비노출, `chronyc tracking`,
-`auditctl -s`, `auditctl -l`을 확인한 후 전체 적용한다. 전체 플레이북은 5대씩
-처리한다. Role은 콘솔 사용자를 강제로 종료하지 않고 systemd 설정만 다시
-읽으므로, 이미 대기 중인 콘솔은 로그아웃 후 새 getty가 시작되거나 재부팅된 뒤
-변경된 로그인 프롬프트가 표시된다.
+`debianbanner`, 새 일반·시리얼 콘솔의 호스트명 비노출을 확인한다. Role은 콘솔
+사용자를 강제로 종료하지 않고 systemd 설정만 다시 읽으므로, 이미 대기 중인
+콘솔은 로그아웃 후 새 getty가 시작되거나 재부팅된 뒤 변경된 로그인 프롬프트가
+표시된다.
+
+이후 NTP, 로컬 로그와 audit를 각각 check mode로 검토하고 실제 적용한다.
+
+```bash
+ansible-playbook playbooks/10-02-apply-ntp.yml \
+  --limit server-01 --check --diff
+ansible-playbook playbooks/10-02-apply-ntp.yml \
+  --limit server-01
+
+ansible-playbook playbooks/10-03-apply-local-logging.yml \
+  --limit server-01 --check --diff
+ansible-playbook playbooks/10-03-apply-local-logging.yml \
+  --limit server-01
+
+ansible-playbook playbooks/10-04-apply-audit.yml \
+  --limit server-01 --check --diff
+ansible-playbook playbooks/10-04-apply-audit.yml \
+  --limit server-01
+```
+
+`chronyc tracking`, `systemctl status systemd-journald rsyslog`, `auditctl -s`와
+`auditctl -l`을 확인한 후 각 플레이북에서 `--limit`을 제거하여 전체 적용한다.
+모든 적용 플레이북은 5대씩 처리한다. 전체 항목을 한 번에 적용해야 할 때만
+`10-99-apply-all-logging.yml`을 사용한다. 중앙 로그는 SIEM 주소와 TLS 검증
+방식을 확정하고 `central_logging_enabled: true`로 변경한 뒤
+`10-05-apply-central-logging.yml`로 적용한다.
 
 시간 동기화는 모든 배포판에서 chrony로 통일한다. Role은 Ubuntu/Debian의
 apt 캐시를 갱신하고, 기존 `systemd-timesyncd`, `ntp`, `ntpd` unit이 있으면

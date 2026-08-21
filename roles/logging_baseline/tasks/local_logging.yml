@@ -1,0 +1,6 @@
+---
+- name: 공통 OS 정보 준비
+  ansible.builtin.import_tasks: common.yml
+
+- name: 로컬 로그 보존 적용
+  ansible.builtin.import_tasks: components/local_logging.yml

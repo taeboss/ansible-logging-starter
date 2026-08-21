@@ -1,0 +1,28 @@
+---
+- name: Ubuntu/Debian 중앙 로그 패키지 설치 전 apt 캐시 갱신
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == 'Debian'
+
+- name: rsyslog 패키지 설치
+  ansible.builtin.package:
+    name: rsyslog
+    state: present
+
+- name: 중앙 로그 전송 설정 설치
+  ansible.builtin.template:
+    src: 60-central-logging.conf.j2
+    dest: /etc/rsyslog.d/60-central-logging.conf
+    owner: root
+    group: root
+    mode: "0640"
+    backup: true
+  when: central_logging_enabled | bool
+  notify: Restart rsyslog
+
+- name: rsyslog 서비스 활성화
+  ansible.builtin.service:
+    name: rsyslog
+    enabled: true
+    state: started

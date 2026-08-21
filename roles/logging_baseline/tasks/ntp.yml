@@ -1,0 +1,6 @@
+---
+- name: 공통 OS 정보 준비
+  ansible.builtin.import_tasks: common.yml
+
+- name: NTP 시간 동기화 적용
+  ansible.builtin.import_tasks: components/ntp.yml

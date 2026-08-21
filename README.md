@@ -187,10 +187,15 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 
 ### 현재 실행 가능한 범위
 
-현재 실제 설정 적용 진입점은 로깅 전용 플레이북뿐이다.
+현재 실제 설정 적용 진입점은 기능별 로깅 플레이북과 전체 적용 플레이북이다.
 
 ```bash
-ansible-playbook playbooks/10-apply-logging.yml
+ansible-playbook playbooks/10-01-apply-login-warning.yml
+ansible-playbook playbooks/10-02-apply-ntp.yml
+ansible-playbook playbooks/10-03-apply-local-logging.yml
+ansible-playbook playbooks/10-04-apply-audit.yml
+ansible-playbook playbooks/10-05-apply-central-logging.yml
+ansible-playbook playbooks/10-99-apply-all-logging.yml
 ```
 
 로그인 정책은 별도 Role을 구현하기 전까지 실행 명령이 존재하지 않는다.
@@ -303,8 +308,8 @@ bootstrap 완료 후 공통 운영 흐름을 실행합니다.
 
 ```bash
 ansible-inventory --graph
-ansible-playbook playbooks/00-connectivity.yml
-ansible-playbook playbooks/01-register-server.yml
+ansible-playbook playbooks/01-connectivity.yml
+ansible-playbook playbooks/02-register-server.yml
 ```
 
 기존 관리자 계정이 이미 SSH 키와 비대화형 sudo를 사용한다면 암호 옵션을
@@ -324,7 +329,7 @@ bootstrap은 기본 10대 단위로 실행합니다. 현재 배치에 아래 항
 정책을 적용하기 전에는 읽기 전용 사전점검을 별도로 실행합니다.
 
 ```bash
-ansible-playbook playbooks/02-security-preflight.yml --limit server-01
+ansible-playbook playbooks/03-security-preflight.yml --limit server-01
 ```
 
 사전점검 보고서는 `reports/preflight/<날짜>/`에 실행 시각별로 보존됩니다.
@@ -334,27 +339,39 @@ ansible-playbook playbooks/02-security-preflight.yml --limit server-01
 
 ## 파일럿 적용
 
-먼저 한 대에 check mode를 실행합니다.
+기능별 플레이북을 한 대씩 순서대로 적용하는 방식을 권장합니다. 먼저 로그인 전
+경고와 시스템 정보 비노출 설정을 check mode로 확인합니다.
 
 ```bash
-ansible-playbook playbooks/10-apply-logging.yml \
+ansible-playbook playbooks/10-01-apply-login-warning.yml \
   --limit server-01 --check --diff
 ```
 
 주의: 서비스 시작과 command handler 등은 check mode만으로 완전히
-검증되지 않습니다. 유지보수 시간에 파일럿 한 대를 실제 적용하고 새 SSH
-세션, `sudo`, `sshd -t`, `chronyc tracking`, `auditctl -s`를 확인합니다.
+검증되지 않습니다. 유지보수 시간에 파일럿 한 대를 실제 적용하고 새 SSH 세션,
+`sudo`, `sshd -t`를 확인합니다.
 
 ```bash
-ansible-playbook playbooks/10-apply-logging.yml --limit server-01
+ansible-playbook playbooks/10-01-apply-login-warning.yml --limit server-01
 ```
 
-파일럿 확인 후 5대 단위로 실행합니다. 플레이북에 `serial: 5`가 설정되어
-있습니다.
+같은 방식으로 NTP, 로컬 로그와 audit를 각각 check mode로 검토한 뒤 실제
+적용합니다. 중앙 로그 전송은 SIEM 주소와 TLS 검증 방식을 확정하고
+`central_logging_enabled: true`로 변경한 뒤 실행합니다.
 
 ```bash
-ansible-playbook playbooks/10-apply-logging.yml
+ansible-playbook playbooks/10-02-apply-ntp.yml --limit server-01 --check --diff
+ansible-playbook playbooks/10-02-apply-ntp.yml --limit server-01
+
+ansible-playbook playbooks/10-03-apply-local-logging.yml --limit server-01 --check --diff
+ansible-playbook playbooks/10-03-apply-local-logging.yml --limit server-01
+
+ansible-playbook playbooks/10-04-apply-audit.yml --limit server-01 --check --diff
+ansible-playbook playbooks/10-04-apply-audit.yml --limit server-01
 ```
+
+각 파일럿 검증 후 `--limit`을 제거하면 모든 서버에 5대씩 적용합니다. 전체
+항목을 한 번에 적용해야 할 때만 `10-99-apply-all-logging.yml`을 사용합니다.
 
 ## 정기 점검
 
@@ -371,17 +388,22 @@ ansible-playbook playbooks/10-apply-logging.yml
 | 단계 | 플레이북 | 실행 성격 | 권장 실행 시점 | 보고서 |
 |---|---|---|---|---|
 | 관리계정 bootstrap | `00-bootstrap-access.yml` | 최초 1회 | 기존 서버를 Ansible 관리 대상으로 전환할 때 | `reports/bootstrap/<날짜>/` |
-| 접속 확인 | `00-connectivity.yml` | 조건부 반복 | 신규 등록, SSH·sudo·Python 변경, 접속 장애 시 | 없음 |
-| 최초 등록 | `01-register-server.yml` | 최초 1회 | 신규 서버 등록 시 | `reports/inventory/` 최신본 |
-| 정책 적용 전 | `02-security-preflight.yml` | 최초 1회 | 최초 로깅·로그인 정책 적용 전 | `reports/preflight/<날짜>/` |
-| 로깅 기준 적용 | `10-apply-logging.yml` | 최초 1회 | 최초 구축 시 | 없음 |
+| 접속 확인 | `01-connectivity.yml` | 조건부 반복 | 신규 등록, SSH·sudo·Python 변경, 접속 장애 시 | 없음 |
+| 최초 등록 | `02-register-server.yml` | 최초 1회 | 신규 서버 등록 시 | `reports/inventory/` 최신본 |
+| 정책 적용 전 | `03-security-preflight.yml` | 최초 1회 | 최초 로깅·로그인 정책 적용 전 | `reports/preflight/<날짜>/` |
+| 로그인 전 경고·정보 비노출 | `10-01-apply-login-warning.yml` | 최초 1회 | 최초 구축 시 | 없음 |
+| NTP 시간 동기화 | `10-02-apply-ntp.yml` | 최초 1회 | 최초 구축 시 | 없음 |
+| 로컬 로그 보존 | `10-03-apply-local-logging.yml` | 최초 1회 | 최초 구축 시 | 없음 |
+| audit 감사 규칙 | `10-04-apply-audit.yml` | 최초 1회 | 최초 구축 시 | 없음 |
+| 중앙 로그 전송 | `10-05-apply-central-logging.yml` | 최초 1회 | 중앙 로그 준비 후 | 없음 |
+| 전체 로깅 기준 일괄 적용 | `10-99-apply-all-logging.yml` | 최초 1회 | 전체 항목을 함께 적용할 때 | 없음 |
 | 로그인 정책 적용(예정) | `11-apply-login-policy.yml` **미구현** | 최초 1회 | Role 구현 후 최초 구축 시 | 없음 |
 | 주간 로그 점검 | `20-weekly-check.yml` | 정기 반복 | 매주 1회 이상 | `reports/weekly/<날짜>/` |
 | 월간 시간 점검 | `30-monthly-time-check.yml` | 정기 반복 | 매월 1회 이상 | `reports/monthly-time/<날짜>/` |
 | 반기 네트워크 점검 | `40-semiannual-network-review.yml` | 정기 반복 | 반기 1회 이상 | `reports/network/<날짜>/` |
 | 계정 접근 검토 | `50-account-access-review.yml` | 정기 반복 | 분기 또는 반기 | `reports/account-access/<날짜>/` |
 
-환경설정 적용 플레이북(`10`, 향후 `11`)은 최초 구축 시 실행하고 스케줄에
+환경설정 적용 플레이북(`10-01`~`10-05`, `10-99`, 향후 `11`)은 최초 구축 시 실행하고 스케줄에
 등록하지 않는다. 중앙 Git 정책이 개정되거나 서버가 재구축되면 새 기준 배포로
 다시 실행할 수 있다. 반대로 `20`~`50` 점검 플레이북은 설정을 변경하지 않고
 결과를 누적하는 정기 실행 대상이다.
