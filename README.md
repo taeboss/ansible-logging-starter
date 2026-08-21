@@ -125,30 +125,6 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 개인키는 마스터노드에만 보관합니다. 대상 서버에는 bootstrap 플레이북이
 공개키만 배포합니다.
 
-### 5. 대상 서버 SSH 호스트 키 검증
-
-마스터노드에서 수집한 지문을 대상 서버 콘솔에서 확인한 지문과 비교한 뒤에만
-`known_hosts`에 등록합니다. 아래 IP는 실제 대상 IP로 바꿉니다.
-
-대상 서버 콘솔:
-
-```bash
-sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
-```
-
-마스터노드:
-
-```bash
-ssh-keyscan -t ed25519 192.0.2.101 > /tmp/192.0.2.101-ed25519.pub
-ssh-keygen -lf /tmp/192.0.2.101-ed25519.pub
-# 콘솔 지문과 일치하는지 확인한 뒤 등록
-ssh-keyscan -H -t ed25519 192.0.2.101 >> ~/.ssh/known_hosts
-ssh-keygen -F 192.0.2.101
-```
-
-서버별로 같은 절차를 반복합니다. 확인 없이 `StrictHostKeyChecking=no`를 사용하지
-않습니다.
-
 ## 정책 적용 현황 요약
 
 이 표의 상태는 정책상 가능한 기능이 아니라 **현재 저장소의 소스코드 기준**이다.
@@ -293,7 +269,8 @@ ansible-playbook -i inventory/bootstrap/hosts.yml \
 
 서버 암호를 파일에 보관하지 않을 때 사용합니다. 마지막 쉼표가 있어야 IP를
 인라인 인벤토리로 인식합니다. 암호는 명령 인자에 넣지 않고 프롬프트에 직접
-입력합니다.
+입력합니다. 먼저 기존 관리자 계정으로 대상 IP에 일반 SSH 접속을 한 번 완료해
+호스트 키를 `known_hosts`에 등록한 뒤 실행합니다.
 
 ```bash
 ansible-playbook -i '192.0.2.101,' \
