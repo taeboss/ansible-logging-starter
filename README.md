@@ -14,31 +14,13 @@ journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시�
 
 ## Ansible 마스터노드 최초 구성
 
-아래 작업은 Ansible을 실행할 Rocky Linux 9 마스터노드에서 수행합니다. 별도의
+아래 작업은 Ansible을 실행할 Rocky Linux 9.8 마스터노드에서 수행합니다. 별도의
 로컬 `ansible-admin` 계정은 필요하지 않으며 저장소와 SSH 개인키를 소유한 현재
 실행 계정으로 Ansible을 실행합니다.
 
-### 1. Rocky Linux 9 업데이트와 기본 패키지 설치
+### 1. Rocky Linux 9.8 기본 패키지 설치
 
-[Rocky Linux 공식 릴리스 정책](https://docs.rockylinux.org/latest/releases/)에
-따라 최신 마이너 릴리스만 지원됩니다. 마스터 후보가 Rocky 9.2라면 바로
-사용하지 말고 유지보수 시간에 최신 Rocky 9 마이너로 먼저 업데이트합니다.
-현재 버전과 업데이트 대상을 확인한 뒤 진행합니다.
-
-```bash
-cat /etc/rocky-release
-sudo dnf check-update
-```
-
-업데이트 영향과 복구 방법을 확인한 뒤 실행합니다. 완료 후 재부팅하고 다시
-접속합니다.
-
-```bash
-sudo dnf upgrade --refresh -y
-sudo reboot
-```
-
-재접속 후 버전과 저장소를 확인하고 필요한 패키지를 설치합니다.
+마스터노드 버전을 확인하고 필요한 패키지를 설치합니다.
 
 ```bash
 cat /etc/rocky-release
@@ -46,10 +28,6 @@ sudo dnf repolist
 sudo dnf install -y git python3.12 python3.12-pip openssh-clients
 python3.12 --version
 ```
-
-Rocky 9.2를 업데이트할 수 없다면 호스트에 현재 Ansible을 직접 설치하지 말고
-Python 3.12 이상이 포함된 승인된 Ansible Execution Environment를 별도로
-사용합니다.
 
 ### 2. 저장소 clone
 
@@ -66,17 +44,8 @@ git pull --ff-only
 
 ### 3. Python 가상환경과 Ansible 설치
 
-프로젝트별 가상환경을 사용하면 마스터노드의 시스템 Python과 Ansible 버전을
-분리할 수 있습니다. 현재 검증 기준은 `ansible-core 2.21.3`이며 마스터노드에
-Python 3.12 이상이 필요합니다. 앞에서 설치한 버전을 확인합니다.
-
-```bash
-python3.12 --version
-```
-
-3.12보다 낮으면 진행하지 말고 조직에서 승인한 Python 3.12 이상 실행환경이나
-Ansible Execution Environment를 준비합니다. 버전별 요구사항은
-[Ansible 공식 지원표](https://docs.ansible.com/projects/ansible/latest/reference_appendices/release_and_maintenance.html)에서 확인합니다.
+시스템 기본 Python은 변경하지 않고 Python 3.12 가상환경에 현재 검증 버전인
+`ansible-core 2.21.3`과 필요한 Collection을 설치합니다.
 
 ```bash
 python3.12 -m venv .venv
@@ -86,7 +55,7 @@ python -m pip install 'ansible-core==2.21.3'
 ansible-galaxy collection install -r requirements.yml
 ```
 
-새 터미널을 열 때마다 저장소에서 다음 명령으로 가상환경을 활성화합니다.
+새 터미널에서는 저장소로 이동하여 가상환경을 활성화합니다.
 
 ```bash
 cd ansible-logging-starter
@@ -98,8 +67,6 @@ source .venv/bin/activate
 ```bash
 ansible --version
 ansible-galaxy collection list ansible.posix
-ansible-playbook playbooks/00-bootstrap-access.yml --syntax-check \
-  -i inventory/bootstrap/hosts.example.yml
 ```
 
 ### 4. Ansible 전용 SSH 키 생성
