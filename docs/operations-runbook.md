@@ -1,4 +1,4 @@
-# 구축 및 운영 절차
+# 공통 구축 및 운영 절차
 
 ## 관리 구조
 
@@ -155,6 +155,32 @@ ansible-playbook playbooks/10-04-apply-audit.yml \
 시간 동기화는 모든 배포판에서 chrony로 통일한다. Role은 Ubuntu/Debian의
 apt 캐시를 갱신하고, 기존 `systemd-timesyncd`, `ntp`, `ntpd` unit이 있으면
 중지·비활성화·마스킹한 뒤 chrony 실행 상태와 단독 실행 여부를 검증한다.
+
+## 자산 진단 체크 취약점별 조치
+
+취약점별 조치는 `docs/remediation/README.md`에서 구현 상태를 확인한 뒤 해당
+코드의 상세 문서와 OS별 플레이북을 사용한다.
+
+1. 진단 결과의 취약점 코드, 대상 서버와 OS를 확인한다.
+2. 상세 문서에서 진단 기준, 자동 조치, 직접 조치와 롤백 방법을 확인한다.
+3. 대상 한 대에서 OS별 플레이북을 `--check --diff`로 실행한다.
+4. 기존 관리자 세션과 콘솔 복구 경로를 유지한 상태에서 실제 적용한다.
+5. 상세 문서의 검증 절차를 완료한 후 다음 서버로 진행한다.
+6. 직접 조치 항목은 자동 조치와 구분하여 서버 담당자가 별도로 수행한다.
+
+U0309는 다음 플레이북을 사용하며 자체적으로 한 번에 한 서버만 처리한다.
+
+```bash
+ansible-playbook playbooks/controls/U0309-redhat.yml \
+  --limit REDHAT_TARGET --check --diff
+
+ansible-playbook playbooks/controls/U0309-ubuntu.yml \
+  --limit UBUNTU_TARGET --check --diff
+```
+
+SSH 자동 조치와 Telnet 직접 조치 절차는
+`docs/remediation/U0309.md`에서 확인한다. 취약점별 플레이북이 소유한 설정은
+기존 통합 플레이북에 다시 추가하지 않는다.
 
 ## 정기 운영
 
