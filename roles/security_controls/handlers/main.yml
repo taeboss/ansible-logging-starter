@@ -1,0 +1,5 @@
+---
+- name: Apply U0309 SSH service change
+  ansible.builtin.service:
+    name: "{{ u0309_ssh_service_name }}"
+    state: "{{ u0309_ssh_service_state }}"

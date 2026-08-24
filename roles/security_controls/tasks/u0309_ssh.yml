@@ -1,0 +1,157 @@
+---
+- name: U0309 SSH 실행 파일 확인
+  ansible.builtin.stat:
+    path: /usr/sbin/sshd
+  register: u0309_sshd_binary
+
+- name: U0309 SSH 지원 상태 확인
+  ansible.builtin.assert:
+    that:
+      - u0309_sshd_binary.stat.exists
+      - u0309_sshd_binary.stat.executable
+    fail_msg: /usr/sbin/sshd가 없거나 실행할 수 없어 U0309를 적용할 수 없습니다.
+
+- name: U0309 SSH 서비스 변경 전 상태 확인
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - "{{ u0309_ssh_service_unit }}"
+  register: u0309_ssh_service_before
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: U0309 SSH 서비스 실행 상태 검증
+  ansible.builtin.assert:
+    that:
+      - u0309_ssh_service_before.rc == 0
+      - u0309_ssh_service_before.stdout | trim == 'active'
+    fail_msg: >-
+      {{ u0309_ssh_service_unit }}가 active 상태가 아니므로 설정을 변경하지 않습니다.
+
+- name: U0309 변경 전 SSH 설정 구문 검사
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/sshd
+      - -t
+  register: u0309_sshd_syntax_before
+  changed_when: false
+  check_mode: false
+
+- name: U0309 SSH 유효 설정 검증 주소 결정
+  ansible.builtin.set_fact:
+    u0309_ssh_validation_address: >-
+      {{ ansible_env.SSH_CONNECTION.split()[0]
+         if ansible_env.SSH_CONNECTION is defined
+         and ansible_env.SSH_CONNECTION.split() | length >= 1
+         else ansible_default_ipv4.address | default('127.0.0.1') }}
+
+- name: U0309 변경 전 SSH 유효 설정 조회
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/sshd
+      - -T
+      - -C
+      - >-
+        user=root,host={{ ansible_fqdn | default(ansible_hostname, true) }},addr={{ u0309_ssh_validation_address }}
+  register: u0309_ssh_effective_before
+  changed_when: false
+  check_mode: false
+
+- name: U0309 root SSH 직접 접속 및 빈 암호 접속 제한
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} ANSIBLE MANAGED U0309"
+    block: |
+      PermitRootLogin no
+      PermitEmptyPasswords no
+    insertbefore: BOF
+    backup: true
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Apply U0309 SSH service change
+
+- name: U0309 변경 후 SSH 유효 설정 조회
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/sshd
+      - -T
+      - -C
+      - >-
+        user=root,host={{ ansible_fqdn | default(ansible_hostname, true) }},addr={{ u0309_ssh_validation_address }}
+  register: u0309_ssh_effective_after
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: U0309 SSH 유효 설정 검증
+  ansible.builtin.assert:
+    that:
+      - "'permitrootlogin no' in u0309_ssh_effective_after.stdout_lines"
+      - "'permitemptypasswords no' in u0309_ssh_effective_after.stdout_lines"
+    fail_msg: >-
+      SSH 유효 설정이 U0309 기준과 다릅니다. 서비스를 변경하지 않고 중단합니다.
+  when: not ansible_check_mode
+
+- name: U0309 SSH 서비스 설정 반영
+  ansible.builtin.meta: flush_handlers
+  when: not ansible_check_mode
+
+- name: U0309 SSH 서비스 변경 후 상태 확인
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - "{{ u0309_ssh_service_unit }}"
+  register: u0309_ssh_service_after
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: U0309 SSH 서비스 변경 후 상태 검증
+  ansible.builtin.assert:
+    that:
+      - u0309_ssh_service_after.rc == 0
+      - u0309_ssh_service_after.stdout | trim == 'active'
+    fail_msg: >-
+      {{ u0309_ssh_service_unit }}가 설정 반영 후 active 상태가 아닙니다.
+  when: not ansible_check_mode
+
+- name: U0309 Telnet TCP 23 포트 상태 조회
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -H
+      - -lnt
+      - sport
+      - "="
+      - ":23"
+  register: u0309_telnet_listener
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: U0309 Telnet PAM 설정 파일 상태 조회
+  ansible.builtin.stat:
+    path: /etc/pam.d/login
+  register: u0309_pam_login
+
+- name: U0309 securetty 파일 상태 조회
+  ansible.builtin.stat:
+    path: /etc/securetty
+  register: u0309_securetty
+
+- name: U0309 적용 결과 안내
+  ansible.builtin.debug:
+    msg:
+      - >-
+        SSH 변경 전: {{ u0309_ssh_effective_before.stdout_lines
+        | select('match', '^(permitrootlogin|permitemptypasswords) ')
+        | list | join(', ') }}
+      - "SSH 목표 설정: permitrootlogin no, permitemptypasswords no"
+      - >-
+        Telnet TCP/23: {{ 'LISTENING' if u0309_telnet_listener.rc == 0
+        and (u0309_telnet_listener.stdout | trim | length > 0)
+        else ('NOT_LISTENING' if u0309_telnet_listener.rc == 0 else 'UNKNOWN') }}
+      - >-
+        /etc/pam.d/login={{ u0309_pam_login.stat.exists }},
+        /etc/securetty={{ u0309_securetty.stat.exists }}
+      - Telnet PAM 및 securetty 자동 조치는 제외했습니다.
