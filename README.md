@@ -3,14 +3,21 @@
 CentOS/RHEL 계열과 Ubuntu 서버의 로그인 경고, 시간 동기화, auditd,
 journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시작점입니다.
 
-## 설계 문서
+## 문서
+
+### 자산 진단 체크 취약점별 조치 방법
+
+- [취약점별 조치 현황과 작성 기준](docs/remediation/README.md)
+- [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md)
+
+### 공통 운영과 잔여 요구사항
 
 - [결정사항과 구현 현황](docs/decisions-and-status.md)
-- [로깅 정책 매핑](docs/logging-policy-mapping.md)
-- [audit 정책 상세 설계](docs/audit-policy-design.md)
-- [로그 보존정책 상세 설계](docs/log-retention-design.md)
-- [로그인 정책 설계 초안](docs/login-policy-design.md)
-- [구축 및 운영 절차](docs/operations-runbook.md)
+- [공통 구축 및 운영 절차](docs/operations-runbook.md)
+- [로깅 정책 잔여 요구사항 매핑](docs/logging-policy-mapping.md)
+- [audit 정책 잔여 요구사항 설계](docs/audit-policy-design.md)
+- [로그 보존정책 잔여 요구사항 설계](docs/log-retention-design.md)
+- [로그인 정책 잔여 요구사항 설계](docs/login-policy-design.md)
 
 ## Ansible 마스터노드 최초 구성
 
@@ -103,7 +110,40 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 - ⚪ 미구현: Ansible로 구현할 수 있지만 현재 실행 코드에는 없다.
 - 🚫 외부 절차: Ansible만으로 보장할 수 없는 사람·IAM·SIEM 영역이다.
 
-### 로깅 정책
+### 자산 진단 체크 취약점별 조치 현황
+
+자산 진단 체크 항목은 취약점 코드와 OS별 플레이북으로 분리한다. 각 설정은
+하나의 취약점 플레이북만 변경하며 기존 통합 플레이북에서는 중복 적용하지
+않는다. 사전점검 플레이북의 읽기 전용 수집은 중복 적용이 아니므로 유지한다.
+
+| 조치 방법 | 상태 | Red Hat 계열 | Ubuntu | 자동 조치 | 직접 조치 |
+|---|---:|---|---|---|---|
+| [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md) | 🟡 | `playbooks/controls/U0309-redhat.yml` | `playbooks/controls/U0309-ubuntu.yml` | SSH: `PermitRootLogin no`, `PermitEmptyPasswords no`, 구문·유효 설정·서비스 상태 검증 | Telnet: 직접 조치 필요. 플레이북은 TCP/23, `/etc/pam.d/login`, `/etc/securetty` 현황만 확인한다. |
+
+취약점별 조치가 추가되어 기존 로깅·로그인 정책의 세부 내용을 완전히 대체하면
+아래 잔여 요구사항 표에서 해당 행을 삭제한다. 일부만 대체한 경우에는 아직
+구현하지 않은 잔여 범위만 남긴다.
+
+U0309는 접속 장애 위험을 줄이기 위해 한 대씩 실행한다. Red Hat 계열은
+`sshd`를 reload하고 Ubuntu는 `ssh`를 restart한다. 변경 전 SSH 구문이나
+서비스 상태가 정상이 아니거나, 변경 후 유효 설정이 기준과 다르면 서비스에
+반영하지 않고 중단한다.
+
+먼저 시험 서버 한 대에서 점검 모드로 변경 예정 내용을 확인한다.
+
+```bash
+ansible-playbook playbooks/controls/U0309-redhat.yml \
+  --limit rocky-server-01 --check --diff
+
+ansible-playbook playbooks/controls/U0309-ubuntu.yml \
+  --limit ubuntu-server-01 --check --diff
+```
+
+점검 결과를 검토한 후 `--check --diff`를 제거하여 실제 적용한다. Telnet이
+TCP/23에서 수신 중인 서버는 플레이 결과에 `LISTENING`으로 표시되며 담당자
+협의 후 PAM과 `/etc/securetty`를 별도로 조치한다.
+
+### 로깅 정책 잔여 요구사항
 
 `10-99-apply-all-logging.yml`은 아래의 `10-01`~`10-05` 적용 항목 전체를
 일괄 실행한다. 표의 점검 플레이북은 설정을 변경하지 않고 증적만 수집한다.
@@ -134,12 +174,12 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 | 비인가 파일·자원·서비스 사용 시도 | 🟡 | `10-04-apply-audit.yml`, `40-semiannual-network-review.yml` (점검) | 최초 1회 | 파일 접근 실패는 기록한다. 승인 파일·포트·서비스 목록 및 실시간 비교·알림은 없다. |
 | 행위별 성공·실패 구분과 유형별 보존 | 🟡 | `10-03-apply-local-logging.yml`, `10-04-apply-audit.yml`, `10-05-apply-central-logging.yml` | 최초 1회 | 접근 실패 errno 규칙은 있다. 전체 이벤트의 성공·실패 규칙과 로그 유형별 보존기간은 미정이다. |
 
-### 로그인 정책
+### 로그인 정책 잔여 요구사항
 
 > 현재 저장소에는 통합 `login_policy` Role과 `11-apply-login-policy.yml`이 없다.
-> 다만 SolidStep 취약점별 조치인 U0309의 SSH 제한은 별도 플레이북으로
-> 구현되어 있다. 아래 항목은 U0309와 겹치는 범위를 제외하면 아직 적용되지
-> 않는다.
+> 아래 표에는 자산 진단 체크 취약점별 조치로 아직 완전히 대체되지 않은
+> 요구사항만
+> 남긴다.
 
 `03-security-preflight.yml`과 `50-account-access-review.yml`은 로그인 정책을
 변경하지 않고 현재 설정과 계정 상태만 수집한다.
@@ -149,7 +189,7 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 | 1인 1계정 발급 | 🚫 | `03-security-preflight.yml`, `50-account-access-review.yml` (점검만) | 조건부 반복 | 계정 생성·중복 UID 점검은 자동화할 수 있지만 실제 사용자와 계정의 1:1 관계는 HR/IAM·발급 절차가 보장해야 한다. |
 | 패스워드는 사용자 본인이 관리 | 🚫 | 외부 절차 | 상시 운영(외부) | Ansible은 비밀번호 자체가 아닌 복잡도·만료·이력 정책만 관리해야 한다. |
 | 2종류 10자 또는 3종류 8자, 권고 12~64자 | ⚪ | `03-security-preflight.yml` (점검만), 적용 플레이북 미구현 | 최초 1회 | `pam_pwquality`로 구현 가능하지만 조건부 OR를 배포판 공통으로 정확히 표현하기 어려워 최소 12자·2종류의 단일 기준을 설계했다. 아직 코드화하지 않았다. |
-| Null 패스워드 금지 | 🟡 | `U0309-redhat.yml`, `U0309-ubuntu.yml`; `03-security-preflight.yml`, `50-account-access-review.yml` (점검만) | 최초 1회 | U0309 플레이북이 SSH의 `PermitEmptyPasswords no`를 적용한다. `/etc/shadow`의 실제 빈 암호 계정 조치는 아직 구현하지 않았다. |
+| 실제 Null 패스워드 계정 금지 | ⚪ | `03-security-preflight.yml`, `50-account-access-review.yml` (점검만), 적용 플레이북 미구현 | 최초 1회 | `/etc/shadow`의 실제 빈 암호 계정 조치는 아직 구현하지 않았다. SSH의 빈 암호 접속 제한은 U0309에서 별도로 관리한다. |
 | 사용자 ID와 동일한 패스워드 금지 | ⚪ | 적용 플레이북 미구현 | 최초 1회 | `pam_pwquality usercheck`로 구현 가능하나 구형 OS 지원 확인과 Role 작성이 필요하다. |
 | 예측 가능한 패스워드 금지 | ⚪ | 적용 플레이북 미구현 | 최초 1회 | 사전검사, 반복·연속문자 제한은 가능하다. 조직명·연도 등 모든 패턴의 완전한 차단은 별도 사전/IAM이 필요하다. |
 | 주기성 패스워드 재사용 금지 | ⚪ | `03-security-preflight.yml` (점검만), 적용 플레이북 미구현 | 최초 1회 | 동일한 최근 비밀번호는 `pam_pwhistory`로 차단 가능하다. 숫자·계절명 변형 패턴은 표준 PAM만으로 완전히 막기 어렵다. |
@@ -161,40 +201,10 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 | 일방향 암호화 저장 | ⚪ | 적용·검증 플레이북 미구현 | 최초 1회 | OS별 SHA-512 또는 yescrypt 정책 적용이 가능하다. 기존 해시는 다음 비밀번호 변경 때 전환된다. 아직 코드화하지 않았다. |
 | 분실·도난 시 본인 확인 후 재발급 | 🚫 | 외부 절차 | 조건부 반복 | 휴대폰·이메일 본인 확인과 승인은 IAM·헬프데스크 영역이다. 승인 후 임시 해시 적용과 즉시 변경만 자동화할 수 있다. |
 
-### SolidStep 취약점별 조치
-
-SolidStep 항목은 취약점 코드와 OS별 플레이북으로 분리한다. 플레이북은
-인벤토리의 OS 사실정보를 확인하고 자기 OS가 아닌 호스트는 변경하지 않는다.
-각 설정은 하나의 취약점 플레이북만 변경한다. 기존 통합 플레이북에서는 해당
-설정을 중복 적용하지 않으며, 사전점검 플레이북의 읽기 전용 수집은 유지한다.
-
-| 조치 방법 | 상태 | Red Hat 계열 | Ubuntu | 자동 조치 | 직접 조치 |
-|---|---:|---|---|---|---|
-| U0309 - root 계정 Telnet·SSH 접근 제한 | 🟡 | `playbooks/controls/U0309-redhat.yml` | `playbooks/controls/U0309-ubuntu.yml` | SSH: `PermitRootLogin no`, `PermitEmptyPasswords no`, 구문·유효 설정·서비스 상태 검증 | Telnet: 직접 조치 필요. 플레이북은 TCP/23, `/etc/pam.d/login`, `/etc/securetty` 현황만 확인한다. |
-
-U0309는 접속 장애 위험을 줄이기 위해 한 대씩 실행한다. Red Hat 계열은
-`sshd`를 reload하고 Ubuntu는 `ssh`를 restart한다. 변경 전 SSH 구문이나
-서비스 상태가 정상이 아니거나, 변경 후 유효 설정이 기준과 다르면 서비스에
-반영하지 않고 중단한다.
-
-먼저 시험 서버 한 대에서 점검 모드로 변경 예정 내용을 확인한다.
-
-```bash
-ansible-playbook playbooks/controls/U0309-redhat.yml \
-  --limit rocky-server-01 --check --diff
-
-ansible-playbook playbooks/controls/U0309-ubuntu.yml \
-  --limit ubuntu-server-01 --check --diff
-```
-
-점검 결과를 검토한 후 `--check --diff`를 제거하여 실제 적용한다. Telnet이
-TCP/23에서 수신 중인 서버는 플레이 결과에 `LISTENING`으로 표시되며 담당자
-협의 후 PAM과 `/etc/securetty`를 별도로 조치한다.
-
 ### 현재 실행 가능한 범위
 
 현재 실제 설정 적용 진입점은 기능별 로깅 플레이북, 전체 적용 플레이북과
-SolidStep 취약점별 플레이북이다.
+자산 진단 체크 취약점별 플레이북이다.
 
 ```bash
 ansible-playbook playbooks/10-01-apply-login-warning.yml
@@ -406,8 +416,8 @@ ansible-playbook playbooks/10-04-apply-audit.yml --limit server-01
 | audit 감사 규칙 | `10-04-apply-audit.yml` | 최초 1회 | 최초 구축 시 | 없음 |
 | 중앙 로그 전송 | `10-05-apply-central-logging.yml` | 최초 1회 | 중앙 로그 준비 후 | 없음 |
 | 전체 로깅 기준 일괄 적용 | `10-99-apply-all-logging.yml` | 최초 1회 | 전체 항목을 함께 적용할 때 | 없음 |
-| U0309 root SSH 제한(Red Hat 계열) | `controls/U0309-redhat.yml` | 최초 1회 | SolidStep U0309 조치 시 | 실행 출력 |
-| U0309 root SSH 제한(Ubuntu) | `controls/U0309-ubuntu.yml` | 최초 1회 | SolidStep U0309 조치 시 | 실행 출력 |
+| U0309 root SSH 제한(Red Hat 계열) | `controls/U0309-redhat.yml` | 최초 1회 | 자산 진단 체크 U0309 조치 시 | 실행 출력 |
+| U0309 root SSH 제한(Ubuntu) | `controls/U0309-ubuntu.yml` | 최초 1회 | 자산 진단 체크 U0309 조치 시 | 실행 출력 |
 | 로그인 정책 적용(예정) | `11-apply-login-policy.yml` **미구현** | 최초 1회 | Role 구현 후 최초 구축 시 | 없음 |
 | 주간 로그 점검 | `20-weekly-check.yml` | 정기 반복 | 매주 1회 이상 | `reports/weekly/<날짜>/` |
 | 월간 시간 점검 | `30-monthly-time-check.yml` | 정기 반복 | 매월 1회 이상 | `reports/monthly-time/<날짜>/` |
