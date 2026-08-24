@@ -1,0 +1,6 @@
+---
+- name: 취약점별 tasks_from 지정 확인
+  ansible.builtin.fail:
+    msg: >-
+      security_controls Role은 직접 실행하지 않습니다.
+      취약점 코드와 OS에 맞는 tasks_from을 지정하십시오.

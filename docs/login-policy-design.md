@@ -3,7 +3,8 @@
 이 문서는 아직 구현되지 않은 별도 `login_policy` Role의 설계 기준이다.
 PAM 변경은 접속 장애 위험이 있으므로 OS별 현황수집과 단일 서버 파일럿 이후
 구현·적용한다. PAM 설정 변경은 다음 인증부터 적용되므로 원칙적으로 재부팅하지
-않는다. SSH 설정도 구문검사 후 `reload`만 수행하고 `restart`하지 않는다.
+않는다. SolidStep 취약점별 플레이북이 소유한 설정은 이 Role에서 중복 적용하지
+않는다.
 
 ## 기능 분류
 
@@ -12,7 +13,7 @@ PAM 변경은 접속 장애 위험이 있으므로 OS별 현황수집과 단일 
 | 1인 1계정 | 일부 가능 | 선언된 계정 생성·중복 UID 점검, 실제 소유자는 IAM/HR 확인 |
 | 비밀번호 본인 관리 | 절차 | Ansible은 비밀번호가 아니라 정책만 관리 |
 | 길이와 문자 종류 | 자동 강제 | `pam_pwquality`, 최소 12자·2종류 초안 |
-| Null 비밀번호 금지 | 자동 강제 | `PermitEmptyPasswords no`, shadow 점검 |
+| Null 비밀번호 금지 | 일부 자동 강제 | SSH `PermitEmptyPasswords no`는 U0309에서 적용, 이 Role은 shadow 점검만 담당 |
 | 사용자 ID와 동일 금지 | 자동 강제 | `usercheck=1` |
 | 예측 가능한 비밀번호 금지 | 일부 가능 | 사전·연속·반복문자 검사 |
 | 주기성 재사용 금지 | 일부 가능 | 정확히 같은 최근 비밀번호는 이력으로 차단 |
@@ -48,7 +49,6 @@ login_policy:
   fail_interval_seconds: 900
   unlock_time_seconds: 1800
   ssh_max_auth_tries: 6
-  permit_empty_passwords: false
   lock_root: false
   allow_reboot: false
 
@@ -93,7 +93,8 @@ PAM 모듈을 확인해야 한다. PAM 파일을 배포판 구분 없이 덮어�
 2. PAM 원본 파일과 현재 `authselect` 또는 `pam-auth-update` 상태를 백업한다.
 3. RHEL 8 이상은 사용자 정의 `authselect` 프로필, Ubuntu는
    `pam-auth-update`, RHEL 7은 검증된 레거시 절차로 변경한다.
-4. `sshd` 설정은 `sshd -t` 검증이 성공한 경우에만 reload한다.
+4. 이 Role이 관리하는 `sshd` 설정은 `sshd -t` 검증이 성공한 경우에만 반영한다.
+   U0309의 root SSH 접근 제한은 취약점별 플레이북에서 별도로 관리한다.
 5. 별도의 새 세션에서 공개키 로그인, 비밀번호 로그인, `sudo`, 실패 잠금과
    잠금 해제를 검증한 뒤 다음 서버로 진행한다.
 6. 검증 실패 시 기존 세션으로 즉시 백업 설정을 복원한다.

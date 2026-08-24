@@ -1,0 +1,17 @@
+---
+- name: U0309 Ubuntu 확인
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution == 'Ubuntu'
+    fail_msg: >-
+      U0309 Ubuntu 조치를 지원하지 않는 OS입니다:
+      {{ ansible_distribution }} {{ ansible_distribution_version }}
+
+- name: U0309 Ubuntu SSH 서비스 정보 설정
+  ansible.builtin.set_fact:
+    u0309_ssh_service_name: ssh
+    u0309_ssh_service_unit: ssh.service
+    u0309_ssh_service_state: restarted
+
+- name: U0309 공통 SSH 조치 실행
+  ansible.builtin.import_tasks: u0309_ssh.yml
