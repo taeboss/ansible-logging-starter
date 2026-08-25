@@ -1,0 +1,105 @@
+---
+- name: U0510 Red Hat 계열 확인
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == 'RedHat'
+    fail_msg: >-
+      U0510 Red Hat 계열 조치를 지원하지 않는 OS입니다:
+      {{ ansible_distribution }} {{ ansible_distribution_version }}
+
+- name: U0510 Red Hat 계열 설치 패키지 정보 수집
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: U0510 Red Hat 계열 조치 대상 패키지 결정
+  ansible.builtin.set_fact:
+    u0510_openssl_packages: >-
+      {{ ['openssl', 'openssl-libs']
+         | intersect(ansible_facts.packages.keys() | list) }}
+
+- name: U0510 Red Hat 계열 OpenSSL 설치 상태 확인
+  ansible.builtin.assert:
+    that:
+      - u0510_openssl_packages | length > 0
+    fail_msg: >-
+      openssl 또는 openssl-libs 패키지가 설치되어 있지 않아 U0510을 적용할 수 없습니다.
+
+- name: U0510 Red Hat 계열 변경 전 패키지 버전 조회
+  ansible.builtin.command:
+    argv: >-
+      {{ ['rpm', '-q', '--qf', '%{NAME}\t%{VERSION}-%{RELEASE}.%{ARCH}\n']
+         + u0510_openssl_packages }}
+  register: u0510_packages_before
+  changed_when: false
+  check_mode: false
+
+- name: U0510 Red Hat 계열 OpenSSL 관련 패키지 최신 업데이트
+  ansible.builtin.dnf:
+    name: "{{ u0510_openssl_packages }}"
+    state: latest
+    update_only: true
+    update_cache: true
+    use_backend: auto
+  register: u0510_update_result
+
+- name: U0510 Red Hat 계열 추가 업데이트 여부 확인
+  ansible.builtin.dnf:
+    name: "{{ u0510_openssl_packages }}"
+    state: latest
+    update_only: true
+    update_cache: false
+    use_backend: auto
+  check_mode: true
+  register: u0510_pending_update
+
+- name: U0510 Red Hat 계열 최신 패키지 적용 검증
+  ansible.builtin.assert:
+    that:
+      - not u0510_pending_update.changed
+    fail_msg: >-
+      활성 저장소에 적용 가능한 OpenSSL 관련 패키지 업데이트가 남아 있습니다.
+  when: not ansible_check_mode
+
+- name: U0510 Red Hat 계열 변경 후 패키지 버전 조회
+  ansible.builtin.command:
+    argv: >-
+      {{ ['rpm', '-q', '--qf', '%{NAME}\t%{VERSION}-%{RELEASE}.%{ARCH}\n']
+         + u0510_openssl_packages }}
+  register: u0510_packages_after
+  changed_when: false
+  check_mode: false
+
+- name: U0510 Red Hat 계열 OpenSSL 실행 버전 조회
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - version
+      - -a
+  register: u0510_openssl_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: U0510 Red Hat 계열 재부팅 필요 여부 조회
+  ansible.builtin.command:
+    argv:
+      - dnf
+      - needs-restarting
+      - -r
+  register: u0510_reboot_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: U0510 Red Hat 계열 적용 결과 안내
+  ansible.builtin.debug:
+    msg:
+      - "변경 전 패키지: {{ u0510_packages_before.stdout_lines }}"
+      - "변경 후 패키지: {{ u0510_packages_after.stdout_lines }}"
+      - "OpenSSL 실행 버전: {{ u0510_openssl_version.stdout_lines | default([]) }}"
+      - >-
+        패키지 변경 여부: {{ u0510_update_result.changed }}
+      - >-
+        재부팅 필요 여부: {{ 'REQUIRED' if u0510_reboot_check.rc == 1
+        else ('NOT_REQUIRED' if u0510_reboot_check.rc == 0 else 'UNKNOWN') }}
+      - 서비스 재시작과 서버 재부팅은 자동 수행하지 않았습니다.

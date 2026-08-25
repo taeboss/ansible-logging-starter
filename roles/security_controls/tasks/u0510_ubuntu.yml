@@ -1,0 +1,125 @@
+---
+- name: U0510 Ubuntu 확인
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution == 'Ubuntu'
+    fail_msg: >-
+      U0510 Ubuntu 조치를 지원하지 않는 OS입니다:
+      {{ ansible_distribution }} {{ ansible_distribution_version }}
+
+- name: U0510 Ubuntu 설치 패키지 정보 수집
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: U0510 Ubuntu 조치 대상 패키지 결정
+  ansible.builtin.set_fact:
+    u0510_openssl_packages: >-
+      {{ ['openssl', 'libssl3', 'libssl3t64', 'libssl1.1', 'libssl1.0.0']
+         | intersect(ansible_facts.packages.keys() | list) }}
+
+- name: U0510 Ubuntu OpenSSL 설치 상태 확인
+  ansible.builtin.assert:
+    that:
+      - u0510_openssl_packages | length > 0
+    fail_msg: >-
+      openssl 또는 지원 대상 libssl 패키지가 설치되어 있지 않아 U0510을 적용할 수 없습니다.
+
+- name: U0510 Ubuntu 변경 전 패키지 버전 조회
+  ansible.builtin.command:
+    argv: >-
+      {{ ['dpkg-query', '-W', '-f=${binary:Package}\t${Version}\n']
+         + u0510_openssl_packages }}
+  register: u0510_packages_before
+  changed_when: false
+  check_mode: false
+
+- name: U0510 Ubuntu OpenSSL 관련 패키지 최신 업데이트
+  ansible.builtin.apt:
+    name: "{{ u0510_openssl_packages }}"
+    state: latest
+    only_upgrade: true
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+    fail_on_autoremove: true
+    policy_rc_d: 101
+    lock_timeout: 120
+  register: u0510_update_result
+
+- name: U0510 Ubuntu 추가 업데이트 여부 확인
+  ansible.builtin.apt:
+    name: "{{ u0510_openssl_packages }}"
+    state: latest
+    only_upgrade: true
+    update_cache: false
+    install_recommends: false
+    fail_on_autoremove: true
+    policy_rc_d: 101
+    lock_timeout: 120
+  check_mode: true
+  register: u0510_pending_update
+
+- name: U0510 Ubuntu 최신 패키지 적용 검증
+  ansible.builtin.assert:
+    that:
+      - not u0510_pending_update.changed
+    fail_msg: >-
+      활성 저장소에 적용 가능한 OpenSSL 관련 패키지 업데이트가 남아 있습니다.
+  when: not ansible_check_mode
+
+- name: U0510 Ubuntu 변경 후 패키지 버전 조회
+  ansible.builtin.command:
+    argv: >-
+      {{ ['dpkg-query', '-W', '-f=${binary:Package}\t${Version}\n']
+         + u0510_openssl_packages }}
+  register: u0510_packages_after
+  changed_when: false
+  check_mode: false
+
+- name: U0510 Ubuntu OpenSSL 실행 버전 조회
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - version
+      - -a
+  register: u0510_openssl_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: U0510 Ubuntu 재부팅 필요 파일 확인
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: u0510_reboot_required
+
+- name: U0510 Ubuntu needrestart 설치 상태 확인
+  ansible.builtin.stat:
+    path: /usr/sbin/needrestart
+  register: u0510_needrestart_binary
+
+- name: U0510 Ubuntu 재시작 대상 조회
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/needrestart
+      - -b
+  register: u0510_needrestart_result
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: u0510_needrestart_binary.stat.exists
+
+- name: U0510 Ubuntu 적용 결과 안내
+  ansible.builtin.debug:
+    msg:
+      - "변경 전 패키지: {{ u0510_packages_before.stdout_lines }}"
+      - "변경 후 패키지: {{ u0510_packages_after.stdout_lines }}"
+      - "OpenSSL 실행 버전: {{ u0510_openssl_version.stdout_lines | default([]) }}"
+      - >-
+        패키지 변경 여부: {{ u0510_update_result.changed }}
+      - >-
+        재부팅 필요 여부: {{ 'REQUIRED' if u0510_reboot_required.stat.exists
+        else 'NOT_REQUIRED' }}
+      - >-
+        needrestart 결과: {{ u0510_needrestart_result.stdout_lines
+        | default(['needrestart 미설치']) }}
+      - 서비스 재시작과 서버 재부팅은 자동 수행하지 않았습니다.

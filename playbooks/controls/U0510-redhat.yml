@@ -1,0 +1,25 @@
+---
+- name: U0510 Red Hat 계열 OpenSSL 최신 패키지 적용
+  hosts: linux_servers
+  gather_facts: true
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+
+  pre_tasks:
+    - name: Red Hat 계열이 아닌 호스트 제외 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ ansible_distribution }} {{ ansible_distribution_version }}은
+          U0510-redhat.yml 적용 대상이 아니므로 제외합니다.
+      when: ansible_os_family != 'RedHat'
+
+    - name: Red Hat 계열이 아닌 호스트 제외
+      ansible.builtin.meta: end_host
+      when: ansible_os_family != 'RedHat'
+
+  tasks:
+    - name: U0510 Red Hat 계열 조치 실행
+      ansible.builtin.import_role:
+        name: security_controls
+        tasks_from: u0510_redhat
