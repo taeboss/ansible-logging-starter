@@ -9,6 +9,7 @@ journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시�
 
 - [취약점별 조치 현황과 작성 기준](docs/remediation/README.md)
 - [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md)
+- [U0510 - OpenSSL 버전 취약성](docs/remediation/U0510.md)
 
 ### 공통 운영과 잔여 요구사항
 
@@ -119,6 +120,7 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 | 조치 방법 | 상태 | Red Hat 계열 | Ubuntu | 자동 조치 | 직접 조치 |
 |---|---:|---|---|---|---|
 | [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md) | 🟡 | `playbooks/controls/U0309-redhat.yml` | `playbooks/controls/U0309-ubuntu.yml` | SSH: `PermitRootLogin no`, `PermitEmptyPasswords no`, 구문·유효 설정·서비스 상태 검증 | Telnet: 직접 조치 필요. 플레이북은 TCP/23, `/etc/pam.d/login`, `/etc/securetty` 현황만 확인한다. |
+| [U0510 - OpenSSL 버전 취약성](docs/remediation/U0510.md) | 🟡 | `playbooks/controls/U0510-redhat.yml` | `playbooks/controls/U0510-ubuntu.yml` | 설치된 OpenSSL 실행 패키지와 라이브러리를 OS 공식 저장소의 최신 버전으로 업데이트하고 추가 업데이트 여부를 검증한다. | 업무 서비스 영향 확인 후 필요한 서비스 재시작 또는 서버 재부팅 |
 
 취약점별 조치가 추가되어 기존 로깅·로그인 정책의 세부 내용을 완전히 대체하면
 아래 잔여 요구사항 표에서 해당 행을 삭제한다. 일부만 대체한 경우에는 아직
@@ -142,6 +144,19 @@ ansible-playbook playbooks/controls/U0309-ubuntu.yml \
 점검 결과를 검토한 후 `--check --diff`를 제거하여 실제 적용한다. Telnet이
 TCP/23에서 수신 중인 서버는 플레이 결과에 `LISTENING`으로 표시되며 담당자
 협의 후 PAM과 `/etc/securetty`를 별도로 조치한다.
+
+U0510은 전체 OS를 업그레이드하지 않고 현재 설치된 OpenSSL 관련 패키지만
+최신화한다. 배포판의 보안 백포트를 인정하므로 upstream 버전 숫자만으로
+양호·취약을 판단하지 않고 OS 패키지 전체 버전과 추가 업데이트 여부를 확인한다.
+서비스 재시작과 재부팅은 자동 수행하지 않는다.
+
+```bash
+ansible-playbook playbooks/controls/U0510-redhat.yml \
+  --limit REDHAT_TARGET --check --diff
+
+ansible-playbook playbooks/controls/U0510-ubuntu.yml \
+  --limit UBUNTU_TARGET --check --diff
+```
 
 ### 로깅 정책 잔여 요구사항
 
@@ -215,9 +230,11 @@ ansible-playbook playbooks/10-05-apply-central-logging.yml
 ansible-playbook playbooks/10-99-apply-all-logging.yml
 ansible-playbook playbooks/controls/U0309-redhat.yml
 ansible-playbook playbooks/controls/U0309-ubuntu.yml
+ansible-playbook playbooks/controls/U0510-redhat.yml
+ansible-playbook playbooks/controls/U0510-ubuntu.yml
 ```
 
-U0309를 제외한 통합 로그인 정책은 별도 Role을 구현하기 전까지 실행 명령이
+U0309·U0510을 제외한 통합 보안 정책은 별도 Role을 구현하기 전까지 실행 명령이
 존재하지 않는다. audit 규칙 보완과 로그 보존정책 역시 상세 설계만 추가했으며
 아직 실행 Role에는 반영하지 않았다.
 
@@ -418,6 +435,8 @@ ansible-playbook playbooks/10-04-apply-audit.yml --limit server-01
 | 전체 로깅 기준 일괄 적용 | `10-99-apply-all-logging.yml` | 최초 1회 | 전체 항목을 함께 적용할 때 | 없음 |
 | U0309 root SSH 제한(Red Hat 계열) | `controls/U0309-redhat.yml` | 최초 1회 | 자산 진단 체크 U0309 조치 시 | 실행 출력 |
 | U0309 root SSH 제한(Ubuntu) | `controls/U0309-ubuntu.yml` | 최초 1회 | 자산 진단 체크 U0309 조치 시 | 실행 출력 |
+| U0510 OpenSSL 업데이트(Red Hat 계열) | `controls/U0510-redhat.yml` | 조건부 반복 | 자산 진단 체크 U0510 조치 또는 신규 보안 업데이트 시 | 실행 출력 |
+| U0510 OpenSSL 업데이트(Ubuntu) | `controls/U0510-ubuntu.yml` | 조건부 반복 | 자산 진단 체크 U0510 조치 또는 신규 보안 업데이트 시 | 실행 출력 |
 | 로그인 정책 적용(예정) | `11-apply-login-policy.yml` **미구현** | 최초 1회 | Role 구현 후 최초 구축 시 | 없음 |
 | 주간 로그 점검 | `20-weekly-check.yml` | 정기 반복 | 매주 1회 이상 | `reports/weekly/<날짜>/` |
 | 월간 시간 점검 | `30-monthly-time-check.yml` | 정기 반복 | 매월 1회 이상 | `reports/monthly-time/<날짜>/` |
