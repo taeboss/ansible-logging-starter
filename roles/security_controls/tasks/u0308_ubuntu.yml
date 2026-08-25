@@ -1,0 +1,12 @@
+---
+- name: U0308 Ubuntu 확인
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+    fail_msg: >-
+      U0308 Ubuntu 조치를 지원하지 않는 OS입니다:
+      {{ ansible_facts['distribution'] }}
+      {{ ansible_facts['distribution_version'] }}
+
+- name: U0308 공통 Session Timeout 조치 실행
+  ansible.builtin.import_tasks: u0308_session_timeout.yml

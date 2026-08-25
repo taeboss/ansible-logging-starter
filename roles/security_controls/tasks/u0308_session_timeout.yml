@@ -1,0 +1,226 @@
+---
+- name: U0308 profile 파일 상태 확인
+  ansible.builtin.stat:
+    path: /etc/profile
+  register: u0308_profile_stat
+
+- name: U0308 profile 파일 적용 가능 여부 확인
+  ansible.builtin.assert:
+    that:
+      - u0308_profile_stat.stat.exists
+      - u0308_profile_stat.stat.isreg | default(false)
+    fail_msg: /etc/profile이 없거나 일반 파일이 아니어서 U0308을 적용할 수 없습니다.
+
+- name: U0308 변경 전 profile 구문 검사
+  ansible.builtin.command:
+    argv:
+      - /bin/bash
+      - -n
+      - /etc/profile
+  changed_when: false
+
+- name: U0308 변경 전 TMOUT 설정 조회
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/grep
+      - -nE
+      - '^[[:space:]]*(export[[:space:]]+)?TMOUT[[:space:]]*='
+      - /etc/profile
+  register: u0308_timeout_before
+  changed_when: false
+  failed_when: u0308_timeout_before.rc not in [0, 1]
+  check_mode: false
+
+- name: U0308 변경 전 새 로그인 셸의 TMOUT 유효값 조회
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/env
+      - -u
+      - TMOUT
+      - /bin/bash
+      - --noprofile
+      - --norc
+      - -c
+      - '. /etc/profile >/dev/null 2>&1 || true; printf "%s\n" "${TMOUT-}"'
+  register: u0308_effective_timeout_before
+  changed_when: false
+  check_mode: false
+
+- name: U0308 기존 관리 마커 확인
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/grep
+      - -Fx
+      - '# BEGIN ANSIBLE MANAGED U0308'
+      - /etc/profile
+  register: u0308_marker_before
+  changed_when: false
+  failed_when: u0308_marker_before.rc not in [0, 1]
+  check_mode: false
+
+- name: U0308 기존 TMOUT 설정 정리 필요 여부 결정
+  ansible.builtin.set_fact:
+    u0308_legacy_cleanup_required: >-
+      {{ not (u0308_effective_timeout_before.stdout is match('^[0-9]+$'))
+         or (u0308_effective_timeout_before.stdout | int) <= 0
+         or (u0308_effective_timeout_before.stdout | int) > 300 }}
+
+- name: U0308 Session Timeout 적용 및 검증
+  block:
+    - name: U0308 기존 비정상 TMOUT 지시문 정리
+      ansible.builtin.replace:
+        path: /etc/profile
+        regexp: >-
+          {{
+            '(?m)^[ \t]*(?:(?:export|readonly)[ \t]+)?TMOUT(?:[ \t]*=[^\n]*)?[ \t]*(?:\n|$)(?=[\s\S]*^# BEGIN ANSIBLE MANAGED U0308[ \t]*$)'
+            if u0308_marker_before.rc == 0
+            else
+            '(?m)^[ \t]*(?:(?:export|readonly)[ \t]+)?TMOUT(?:[ \t]*=[^\n]*)?[ \t]*(?:\n|$)'
+          }}
+        replace: ''
+        backup: true
+      register: u0308_legacy_cleanup
+      when: u0308_legacy_cleanup_required
+
+    - name: U0308 Session Timeout 기준 적용
+      ansible.builtin.blockinfile:
+        path: /etc/profile
+        marker: '# {mark} ANSIBLE MANAGED U0308'
+        insertafter: EOF
+        backup: true
+        block: |
+          # Preserve an existing stricter timeout; otherwise enforce 300 seconds.
+          case "${TMOUT-}" in
+            ''|*[!0-9]*) TMOUT=300 ;;
+            *)
+              if [ "$TMOUT" -le 0 ] || [ "$TMOUT" -gt 300 ]; then
+                TMOUT=300
+              fi
+              ;;
+          esac
+          readonly TMOUT
+          export TMOUT
+      register: u0308_profile_update
+
+    - name: U0308 변경 후 profile 구문 검사
+      ansible.builtin.command:
+        argv:
+          - /bin/bash
+          - -n
+          - /etc/profile
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: U0308 새 로그인 셸의 TMOUT 유효값 조회
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/env
+          - -u
+          - TMOUT
+          - /bin/bash
+          - --noprofile
+          - --norc
+          - -c
+          - '. /etc/profile >/dev/null 2>&1; printf "%s\n" "${TMOUT-}"'
+      register: u0308_effective_timeout
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: U0308 Session Timeout 적용 결과 검증
+      ansible.builtin.assert:
+        that:
+          - u0308_effective_timeout.stdout is match('^[0-9]+$')
+          - (u0308_effective_timeout.stdout | int) >= 1
+          - (u0308_effective_timeout.stdout | int) <= 300
+        fail_msg: >-
+          새 로그인 셸의 TMOUT 유효값이 U0308 기준인 1~300초가 아닙니다:
+          {{ u0308_effective_timeout.stdout | default('미확인') }}
+      when: not ansible_check_mode
+
+  rescue:
+    - name: U0308 검증 실패 시 기존 설정 정리 백업 복원
+      ansible.builtin.copy:
+        src: "{{ u0308_legacy_cleanup.backup_file }}"
+        dest: /etc/profile
+        remote_src: true
+        owner: "{{ u0308_profile_stat.stat.pw_name | default('root') }}"
+        group: "{{ u0308_profile_stat.stat.gr_name | default('root') }}"
+        mode: "{{ u0308_profile_stat.stat.mode | default('0644') }}"
+      when:
+        - u0308_legacy_cleanup is defined
+        - u0308_legacy_cleanup.changed | default(false)
+        - u0308_legacy_cleanup.backup_file is defined
+
+    - name: U0308 관리 블록 변경 백업 복원
+      ansible.builtin.copy:
+        src: "{{ u0308_profile_update.backup_file }}"
+        dest: /etc/profile
+        remote_src: true
+        owner: "{{ u0308_profile_stat.stat.pw_name | default('root') }}"
+        group: "{{ u0308_profile_stat.stat.gr_name | default('root') }}"
+        mode: "{{ u0308_profile_stat.stat.mode | default('0644') }}"
+      when:
+        - >-
+          u0308_legacy_cleanup is not defined
+          or not (u0308_legacy_cleanup.changed | default(false))
+        - u0308_profile_update is defined
+        - u0308_profile_update.changed | default(false)
+        - u0308_profile_update.backup_file is defined
+
+    - name: U0308 복원된 profile 구문 확인
+      ansible.builtin.command:
+        argv:
+          - /bin/bash
+          - -n
+          - /etc/profile
+      changed_when: false
+      when:
+        - >-
+          (u0308_profile_update is defined
+           and u0308_profile_update.changed | default(false)
+           and u0308_profile_update.backup_file is defined)
+          or
+          (u0308_legacy_cleanup is defined
+           and u0308_legacy_cleanup.changed | default(false)
+           and u0308_legacy_cleanup.backup_file is defined)
+
+    - name: U0308 적용 실패 안내
+      ansible.builtin.fail:
+        msg: >-
+          U0308 적용 후 검증에 실패했습니다. 변경이 발생한 경우 /etc/profile을
+          백업본으로 복원했습니다. 원인: {{ ansible_failed_result.msg
+          | default('상세 원인 미확인') }}
+
+- name: U0308 변경 후 TMOUT 설정 조회
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/grep
+      - -nE
+      - '^[[:space:]]*(export[[:space:]]+)?TMOUT[[:space:]]*='
+      - /etc/profile
+  register: u0308_timeout_after
+  changed_when: false
+  failed_when: u0308_timeout_after.rc not in [0, 1]
+  check_mode: false
+
+- name: U0308 적용 결과 안내
+  ansible.builtin.debug:
+    msg:
+      - "변경 전 TMOUT 행: {{ u0308_timeout_before.stdout_lines }}"
+      - >-
+        변경 전 새 로그인 셸 TMOUT 유효값:
+        {{ u0308_effective_timeout_before.stdout | default('미설정') }}
+      - >-
+        기존 비정상 TMOUT 지시문 정리 여부:
+        {{ u0308_legacy_cleanup.changed | default(false) }}
+      - >-
+        설정 변경 여부: {{ u0308_profile_update.changed }}
+      - >-
+        새 로그인 셸 TMOUT 유효값: {{ u0308_effective_timeout.stdout
+        | default('점검 모드에서는 실제 파일을 변경하지 않아 검증 생략') }}
+      - "현재 파일의 TMOUT 행: {{ u0308_timeout_after.stdout_lines }}"
+      - >-
+        최초 백업 파일: {{ u0308_legacy_cleanup.backup_file
+        | default(u0308_profile_update.backup_file
+        | default('변경 없음 또는 점검 모드')) }}
+      - 기존 로그인 세션은 유지되며 새 로그인 세션부터 적용됩니다.
