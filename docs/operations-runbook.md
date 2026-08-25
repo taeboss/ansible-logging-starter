@@ -168,6 +168,22 @@ apt 캐시를 갱신하고, 기존 `systemd-timesyncd`, `ntp`, `ntpd` unit이 �
 5. 상세 문서의 검증 절차를 완료한 후 다음 서버로 진행한다.
 6. 직접 조치 항목은 자동 조치와 구분하여 서버 담당자가 별도로 수행한다.
 
+U0308은 `/etc/profile`에 Session Timeout 기준을 적용한다. 기존 1~300초 값은
+유지하고, 300초를 초과하거나 비정상인 기존 활성 지시문은 관리 블록으로 통합한다.
+미설정·0·비숫자·300초 초과 값의 최종 유효값은 300초로 보정한다.
+
+```bash
+ansible-playbook playbooks/controls/U0308-redhat.yml \
+  --limit REDHAT_TARGET --check --diff
+
+ansible-playbook playbooks/controls/U0308-ubuntu.yml \
+  --limit UBUNTU_TARGET --check --diff
+```
+
+적용 후 새 로그인 세션에서 `TMOUT`이 1~300인지 확인한다. 기존 로그인 세션은
+유지되며 서비스 재시작과 서버 재부팅은 필요하지 않다. 상세 기준은
+`docs/remediation/U0308.md`에서 확인한다.
+
 U0309는 다음 플레이북을 사용하며 자체적으로 한 번에 한 서버만 처리한다.
 
 ```bash

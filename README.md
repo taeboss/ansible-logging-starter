@@ -8,6 +8,7 @@ journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시�
 ### 자산 진단 체크 취약점별 조치 방법
 
 - [취약점별 조치 현황과 작성 기준](docs/remediation/README.md)
+- [U0308 - Session Timeout 설정](docs/remediation/U0308.md)
 - [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md)
 - [U0510 - OpenSSL 버전 취약성](docs/remediation/U0510.md)
 
@@ -119,12 +120,26 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 
 | 조치 방법 | 상태 | Red Hat 계열 | Ubuntu | 자동 조치 | 직접 조치 |
 |---|---:|---|---|---|---|
+| [U0308 - Session Timeout 설정](docs/remediation/U0308.md) | ✅ | `playbooks/controls/U0308-redhat.yml` | `playbooks/controls/U0308-ubuntu.yml` | `/etc/profile`의 비정상 `TMOUT` 지시문을 정리한다. 유효값이 없거나 0·비숫자·300초 초과이면 300초로 설정하고, 기존 1~300초는 유지한다. | 없음. 새 로그인 세션에서 적용 여부 확인 |
 | [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md) | 🟡 | `playbooks/controls/U0309-redhat.yml` | `playbooks/controls/U0309-ubuntu.yml` | SSH: `PermitRootLogin no`, `PermitEmptyPasswords no`, 구문·유효 설정·서비스 상태 검증 | Telnet: 직접 조치 필요. 플레이북은 TCP/23, `/etc/pam.d/login`, `/etc/securetty` 현황만 확인한다. |
 | [U0510 - OpenSSL 버전 취약성](docs/remediation/U0510.md) | 🟡 | `playbooks/controls/U0510-redhat.yml` | `playbooks/controls/U0510-ubuntu.yml` | 설치된 OpenSSL 실행 패키지와 라이브러리를 OS 공식 저장소의 최신 버전으로 업데이트하고 추가 업데이트 여부를 검증한다. | 업무 서비스 영향 확인 후 필요한 서비스 재시작 또는 서버 재부팅 |
 
 취약점별 조치가 추가되어 기존 로깅·로그인 정책의 세부 내용을 완전히 대체하면
 아래 잔여 요구사항 표에서 해당 행을 삭제한다. 일부만 대체한 경우에는 아직
 구현하지 않은 잔여 범위만 남긴다.
+
+U0308은 `/etc/profile` 끝의 전용 관리 블록에서 새 로그인 셸의 `TMOUT`을
+1~300초로 제한한다. 미설정·0·비숫자·300초 초과 값은 300초로 보정하고,
+300초를 초과하거나 비정상인 기존 활성 지시문은 관리 블록 밖에서 제거한다.
+기존 1~300초 값은 유지한다. 서비스 재시작과 재부팅은 필요하지 않다.
+
+```bash
+ansible-playbook playbooks/controls/U0308-redhat.yml \
+  --limit REDHAT_TARGET --check --diff
+
+ansible-playbook playbooks/controls/U0308-ubuntu.yml \
+  --limit UBUNTU_TARGET --check --diff
+```
 
 U0309는 접속 장애 위험을 줄이기 위해 한 대씩 실행한다. Red Hat 계열은
 `sshd`를 reload하고 Ubuntu는 `ssh`를 restart한다. 변경 전 SSH 구문이나
@@ -228,13 +243,15 @@ ansible-playbook playbooks/10-03-apply-local-logging.yml
 ansible-playbook playbooks/10-04-apply-audit.yml
 ansible-playbook playbooks/10-05-apply-central-logging.yml
 ansible-playbook playbooks/10-99-apply-all-logging.yml
+ansible-playbook playbooks/controls/U0308-redhat.yml
+ansible-playbook playbooks/controls/U0308-ubuntu.yml
 ansible-playbook playbooks/controls/U0309-redhat.yml
 ansible-playbook playbooks/controls/U0309-ubuntu.yml
 ansible-playbook playbooks/controls/U0510-redhat.yml
 ansible-playbook playbooks/controls/U0510-ubuntu.yml
 ```
 
-U0309·U0510을 제외한 통합 보안 정책은 별도 Role을 구현하기 전까지 실행 명령이
+U0308·U0309·U0510을 제외한 통합 보안 정책은 별도 Role을 구현하기 전까지 실행 명령이
 존재하지 않는다. audit 규칙 보완과 로그 보존정책 역시 상세 설계만 추가했으며
 아직 실행 Role에는 반영하지 않았다.
 
@@ -433,6 +450,8 @@ ansible-playbook playbooks/10-04-apply-audit.yml --limit server-01
 | audit 감사 규칙 | `10-04-apply-audit.yml` | 최초 1회 | 최초 구축 시 | 없음 |
 | 중앙 로그 전송 | `10-05-apply-central-logging.yml` | 최초 1회 | 중앙 로그 준비 후 | 없음 |
 | 전체 로깅 기준 일괄 적용 | `10-99-apply-all-logging.yml` | 최초 1회 | 전체 항목을 함께 적용할 때 | 없음 |
+| U0308 Session Timeout(Red Hat 계열) | `controls/U0308-redhat.yml` | 최초 1회 | 자산 진단 체크 U0308 조치 시 | 실행 출력 |
+| U0308 Session Timeout(Ubuntu) | `controls/U0308-ubuntu.yml` | 최초 1회 | 자산 진단 체크 U0308 조치 시 | 실행 출력 |
 | U0309 root SSH 제한(Red Hat 계열) | `controls/U0309-redhat.yml` | 최초 1회 | 자산 진단 체크 U0309 조치 시 | 실행 출력 |
 | U0309 root SSH 제한(Ubuntu) | `controls/U0309-ubuntu.yml` | 최초 1회 | 자산 진단 체크 U0309 조치 시 | 실행 출력 |
 | U0510 OpenSSL 업데이트(Red Hat 계열) | `controls/U0510-redhat.yml` | 조건부 반복 | 자산 진단 체크 U0510 조치 또는 신규 보안 업데이트 시 | 실행 출력 |
