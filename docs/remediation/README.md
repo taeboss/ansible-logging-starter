@@ -8,9 +8,9 @@
 | 조치 방법 | 상태 | 자동 조치 | 직접 조치 | 상세 문서 |
 |---|---:|---|---|---|
 | U0207 - /etc/hosts 파일 권한 설정 | ✅ | 링크 원본을 포함해 소유자 root, 권한 `0400` 또는 `0600` 적용 | 업무·서비스 계정 이름 해석 확인 | [U0207](U0207.md) |
-| U0307 - 서비스 Banner 관리 | 🟡 | 서비스 사용 현황 점검, 경고문과 SSH 배너 조치 | Telnet·FTP·SMTP·DNS 제품별 조치 | [U0307](U0307.md) |
+| U0307 - 서비스 Banner 관리 | 🟡 | 서비스 사용 현황 점검, 경고문과 SSH 배너 조치 | MOTD 체크 추후 확인, Telnet·FTP·SMTP·DNS 제품별 조치 | [U0307](U0307.md) |
 | U0308 - Session Timeout 설정 | ✅ | `/etc/profile`의 `TMOUT`을 1~300초로 제한 | 새 로그인 세션에서 확인 | [U0308](U0308.md) |
-| U0309 - root 계정 Telnet·SSH 접근 제한 | 🟡 | SSH 설정 및 서비스 반영 | Telnet PAM과 `/etc/securetty` | [U0309](U0309.md) |
+| U0309 - root 계정 Telnet·SSH 접근 제한 | 🟡 | SSH 설정 및 서비스 반영 | Telnet PAM과 `/etc/securetty` 추후 확인·직접 조치 | [U0309](U0309.md) |
 | U0507 - SSH(Secure Shell) 버전 취약성 | 🟡 | 실행 중인 SSH의 설치된 OpenSSH 관련 패키지 최신 업데이트 | 신규 접속 확인 후 SSH 서비스 재시작 판단 | [U0507](U0507.md) |
 | U0509 - glibc 버전 취약성 | 🟡 | OS 공식 저장소의 설치된 glibc 관련 패키지 최신 업데이트 | 필요한 서비스 재시작 또는 서버 재부팅 | [U0509](U0509.md) |
 | U0510 - OpenSSL 버전 취약성 | 🟡 | OS 공식 저장소의 설치된 OpenSSL 관련 패키지 최신 업데이트 | 필요한 서비스 재시작 또는 서버 재부팅 | [U0510](U0510.md) |

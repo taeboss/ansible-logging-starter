@@ -125,9 +125,9 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 | 조치 항목 | 상태 | 실행 플레이북 | OS별 Role 태스크 | 자동 조치 | 직접 조치 |
 |---|---:|---|---|---|---|
 | [U0207 - /etc/hosts 파일 권한 설정](docs/remediation/U0207.md) | ✅ | `playbooks/controls/U0207.yml` | `u0207_redhat.yml`, `u0207_ubuntu.yml` | 링크 원본을 포함해 root 소유 및 `0600` 이하 권한 설정 | 업무·서비스 계정 이름 해석 확인 |
-| [U0307 - 서비스 Banner 관리](docs/remediation/U0307.md) | 🟡 | `U0307-check.yml`, `U0307-ssh.yml` | `u0307_check_*`, `u0307_ssh_*` | 서비스 사용 현황 점검, 경고문과 SSH 배너 조치 | Telnet·FTP·SMTP·DNS 제품별 조치 |
+| [U0307 - 서비스 Banner 관리](docs/remediation/U0307.md) | 🟡 | `U0307-check.yml`, `U0307-ssh.yml` | `u0307_check_*`, `u0307_ssh_*` | 서비스 사용 현황 점검, 경고문과 SSH 배너 조치 | MOTD 체크 추후 확인, Telnet·FTP·SMTP·DNS 제품별 조치 |
 | [U0308 - Session Timeout 설정](docs/remediation/U0308.md) | ✅ | `playbooks/controls/U0308.yml` | `u0308_redhat.yml`, `u0308_ubuntu.yml` | 로그인 셸 `TMOUT` 설정 | 새 로그인 세션에서 적용 확인 |
-| [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md) | 🟡 | `playbooks/controls/U0309.yml` | `u0309_redhat.yml`, `u0309_ubuntu.yml` | root SSH 접근 제한, Telnet 현황 확인 | Telnet PAM과 `/etc/securetty` 조치 |
+| [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md) | 🟡 | `playbooks/controls/U0309.yml` | `u0309_redhat.yml`, `u0309_ubuntu.yml` | root SSH 접근 제한, Telnet 현황 확인 | Telnet PAM과 `/etc/securetty` 추후 확인·직접 조치 |
 | [U0507 - SSH(Secure Shell) 버전 취약성](docs/remediation/U0507.md) | 🟡 | `playbooks/controls/U0507.yml` | `u0507_redhat.yml`, `u0507_ubuntu.yml` | 실행 중인 SSH의 설치된 OpenSSH 패키지 최신화 | 신규 접속 확인 후 SSH 서비스 재시작 판단 |
 | [U0509 - glibc 버전 취약성](docs/remediation/U0509.md) | 🟡 | `playbooks/controls/U0509.yml` | `u0509_redhat.yml`, `u0509_ubuntu.yml` | 설치된 glibc 관련 패키지 최신화 | 서비스 재시작·재부팅 필요 여부 판단 |
 | [U0510 - OpenSSL 버전 취약성](docs/remediation/U0510.md) | 🟡 | `playbooks/controls/U0510.yml` | `u0510_redhat.yml`, `u0510_ubuntu.yml` | 설치된 OpenSSL 관련 패키지 최신화 | 서비스 재시작·재부팅 필요 여부 판단 |
@@ -143,7 +143,7 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 | 정책 항목 | 상태 | 관련 플레이북 | Ansible 실행 성격 | 현재 소스 기준 설명 |
 |---|---:|---|---|---|
 | 로그인 전 시스템 정보 비노출 및 인가 사용자 경고 | ✅ | `controls/U0307-ssh.yml`, `10-01-apply-login-warning.yml` | 최초 1회 | U0307 SSH 조치가 `/etc/issue`, `/etc/issue.net`의 승인 경고문과 SSH Banner·추가 버전 정보 비노출을 관리한다. `10-01`은 일반·시리얼 콘솔의 호스트명을 숨긴다. OpenSSH 프로토콜의 최소 식별정보는 남는다. |
-| 불필요한 로그인 안내문 제거 | 🟡 | `controls/U0307-check.yml` (점검), `controls/U0307-ssh.yml` | 최초 1회 | SSH 사전 인증 Banner는 통제하고 기타 서비스 사용 현황은 점검한다. MOTD는 인증 후 안내문으로 U0307 범위에서 제외하며 Telnet·FTP·SMTP·DNS 제품별 안내문은 직접 조치한다. |
+| 불필요한 로그인 안내문 제거 | 🟡 | `controls/U0307-check.yml` (점검), `controls/U0307-ssh.yml` | 최초 1회 | SSH 사전 인증 Banner는 통제하고 기타 서비스 사용 현황은 점검한다. MOTD 체크는 추후 확인이 필요하며 Telnet·FTP·SMTP·DNS 제품별 안내문은 직접 조치한다. |
 | 로그 및 감사 기록의 관리자 전용 관리 | 🟡 | `10-03-apply-local-logging.yml`, `10-04-apply-audit.yml` | 최초 1회 | `logadmin` 그룹, `/var/log/compliance`, audit 규칙 권한만 구현했다. 관리자 명단, 전체 로그 권한과 sudo 정책이 필요하다. |
 | chrony 기반 외부 NTP 동기화 | ✅ | `10-02-apply-ntp.yml` | 최초 1회 | `time.kaist.ac.kr`, `time.nist.gov`을 사용하도록 chrony를 설치·설정한다. Ubuntu/Debian은 apt 캐시를 갱신하고 기존 timesyncd/ntpd를 중지·비활성화·마스킹한다. 적용 전에 DNS와 UDP/123 응답을 확인해야 한다. |
 | 월 1회 시간 오차 점검 | 🟡 | `30-monthly-time-check.yml` (점검) | 정기 반복 | 오차 점검 플레이북은 있지만 AWX/AAP·CI·cron 스케줄은 등록되지 않았다. |
