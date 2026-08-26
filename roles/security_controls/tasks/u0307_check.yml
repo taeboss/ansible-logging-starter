@@ -1,0 +1,127 @@
+---
+- name: U0307 설치 패키지 현황 수집
+  ansible.builtin.package_facts:
+    manager: auto
+  failed_when: false
+
+- name: U0307 systemd 서비스 현황 수집
+  ansible.builtin.service_facts:
+  failed_when: false
+
+- name: U0307 실행 프로세스 현황 수집
+  ansible.builtin.command:
+    argv:
+      - ps
+      - -eo
+      - pid=,comm=,args=
+  register: u0307_processes
+  changed_when: false
+  check_mode: false
+
+- name: U0307 TCP·UDP LISTEN 포트 현황 수집
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -H
+      - -lntup
+  register: u0307_listeners
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: U0307 점검 대상 설정 파일 목록 생성
+  ansible.builtin.set_fact:
+    u0307_config_paths: >-
+      {{ u0307_check_profiles | map(attribute='configs') | flatten | unique | list }}
+
+- name: U0307 서비스별 배너 설정 파일 현황 확인
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ u0307_config_paths }}"
+  register: u0307_config_stats
+  loop_control:
+    label: "{{ item }}"
+
+- name: U0307 활성 배너 설정 지시문 조회
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -Ein
+      - >-
+        ^[[:space:]]*(Banner|DebianBanner|VersionAddendum|BANNER|ftpd_banner|banner_file|ServerIdent|O[[:space:]]+SmtpGreetingMessage|smtpd_banner|version[[:space:]])
+      - "{{ item.item }}"
+  loop: "{{ u0307_config_stats.results }}"
+  register: u0307_banner_settings
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: item.stat.exists
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: U0307 배너 설정 조회 결과 안내
+  ansible.builtin.debug:
+    msg: "{{ item.item.item }}: {{ item.stdout_lines | default([]) }}"
+  loop: "{{ u0307_banner_settings.results | default([]) }}"
+  when: not (item.skipped | default(false))
+  loop_control:
+    label: "{{ item.item.item | default('미확인') }}"
+
+- name: U0307 서비스별 사용 현황 분류
+  ansible.builtin.debug:
+    msg:
+      - >-
+        상태: {{
+          'LISTENING' if u0307_profile_listeners | length > 0 else
+          'ACTIVE_NOT_LISTENING' if
+            (u0307_profile_active_services | length > 0 or
+             u0307_profile_processes | length > 0) else
+          'INSTALLED_INACTIVE' if
+            (u0307_profile_installed_packages | length > 0 or
+             u0307_profile_known_services | length > 0 or
+             u0307_profile_configs | length > 0) else
+          'NOT_INSTALLED'
+        }}
+      - "설치 패키지: {{ u0307_profile_installed_packages }}"
+      - >-
+        systemd 서비스: {{ u0307_profile_known_services
+        | map(attribute='key') | list }}
+      - >-
+        실행 서비스: {{ u0307_profile_active_services
+        | map(attribute='key') | list }}
+      - "프로세스: {{ u0307_profile_processes }}"
+      - "LISTEN 포트: {{ u0307_profile_listeners }}"
+      - "설정 파일: {{ u0307_profile_configs }}"
+  loop: "{{ u0307_check_profiles }}"
+  loop_control:
+    loop_var: u0307_profile
+    label: "{{ u0307_profile.name }}"
+  vars:
+    u0307_profile_installed_packages: >-
+      {{ u0307_profile.packages
+         | select('in', ansible_facts.packages | default({})) | list }}
+    u0307_profile_known_services: >-
+      {{ ansible_facts.services | default({}) | dict2items
+         | selectattr('key', 'in', u0307_profile.services) | list }}
+    u0307_profile_active_services: >-
+      {{ u0307_profile_known_services
+         | selectattr('value.state', 'equalto', 'running') | list }}
+    u0307_profile_processes: >-
+      {{ u0307_processes.stdout_lines | default([])
+         | select('search', u0307_profile.process_regex) | list }}
+    u0307_profile_listeners: >-
+      {{ u0307_listeners.stdout_lines | default([])
+         | select('search', u0307_profile.port_regex) | list }}
+    u0307_profile_configs: >-
+      {{ u0307_config_stats.results
+         | selectattr('item', 'in', u0307_profile.configs)
+         | selectattr('stat.exists') | map(attribute='item') | list }}
+
+- name: U0307 점검 결과 판단 기준 안내
+  ansible.builtin.debug:
+    msg:
+      - LISTENING은 해당 서비스 포트가 TCP·UDP에서 수신 중임을 뜻합니다.
+      - ACTIVE_NOT_LISTENING은 서비스나 프로세스는 실행 중이지만 대상 포트가 확인되지 않음을 뜻합니다.
+      - INSTALLED_INACTIVE는 패키지·unit·설정 파일은 있지만 실행·수신 중이 아님을 뜻합니다.
+      - 상태 분류는 사용 현황 확인을 위한 참고값이며 U0307 양호·취약 판정 결과가 아닙니다.
+      - 점검 플레이북은 서비스를 시작·중지하거나 설정 파일을 변경하지 않습니다.

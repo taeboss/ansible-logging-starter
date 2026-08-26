@@ -1,0 +1,12 @@
+---
+- name: U0307 Ubuntu SSH 서비스 정보 설정
+  ansible.builtin.set_fact:
+    u0307_ssh_service_name: ssh
+    u0307_ssh_service_unit: ssh.service
+    u0307_ssh_config_block: |
+      Banner /etc/issue.net
+      VersionAddendum none
+      DebianBanner no
+
+- name: U0307 공통 SSH 배너 조치 실행
+  ansible.builtin.import_tasks: u0307_ssh.yml

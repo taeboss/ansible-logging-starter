@@ -1,5 +1,5 @@
 ---
-- name: 로그인 전 경고 및 시스템 정보 비노출 적용
+- name: 콘솔 호스트명 비노출 및 SSH 상세 인증 로그 적용
   hosts: linux_servers
   gather_facts: true
   become: true
@@ -7,7 +7,7 @@
   max_fail_percentage: 0
 
   tasks:
-    - name: 로그인 전 경고 및 정보 비노출 Role 실행
+    - name: 콘솔 비노출 및 SSH 인증 로그 Role 실행
       ansible.builtin.import_role:
         name: logging_baseline
         tasks_from: login_warning

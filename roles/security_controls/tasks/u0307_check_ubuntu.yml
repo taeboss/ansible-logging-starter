@@ -1,0 +1,37 @@
+---
+- name: U0307 Ubuntu 점검 항목 설정
+  ansible.builtin.set_fact:
+    u0307_check_profiles:
+      - name: SSH
+        packages: [openssh-server]
+        services: [ssh.service, ssh.socket]
+        port_regex: ':(22)(\s|$)'
+        process_regex: '(^|[ /])sshd([ :]|$)'
+        configs: [/etc/ssh/sshd_config, /etc/issue, /etc/issue.net]
+      - name: Telnet
+        packages: [inetutils-telnetd, telnetd]
+        services: [telnet.service, telnet.socket, inetutils-telnetd.service]
+        port_regex: ':(23)(\s|$)'
+        process_regex: '(^|[ /])(in\.)?telnetd([ :]|$)'
+        configs: [/etc/xinetd.d/telnet, /etc/default/telnetd]
+      - name: FTP
+        packages: [vsftpd, proftpd-basic, pure-ftpd]
+        services: [vsftpd.service, proftpd.service, pure-ftpd.service]
+        port_regex: ':(21)(\s|$)'
+        process_regex: '(^|[ /])(vsftpd|proftpd|pure-ftpd)([ :]|$)'
+        configs: [/etc/vsftpd.conf, /etc/vsftpd/vsftpd.conf, /etc/proftpd/proftpd.conf, /etc/proftpd.conf, /usr/local/etc/proftpd.conf, /etc/ftpaccess]
+      - name: SMTP
+        packages: [postfix, sendmail-bin, exim4-daemon-light, exim4-daemon-heavy]
+        services: [postfix.service, sendmail.service, exim4.service]
+        port_regex: ':(25|465|587)(\s|$)'
+        process_regex: '(^|[ /])(postfix|sendmail|exim)([ /:]|$)'
+        configs: [/etc/postfix/main.cf, /etc/mail/sendmail.cf, /etc/exim4/exim4.conf.template]
+      - name: DNS
+        packages: [bind9, unbound]
+        services: [named.service, bind9.service, unbound.service]
+        port_regex: ':(53)(\s|$)'
+        process_regex: '(^|[ /])(named|unbound)([ :]|$)'
+        configs: [/etc/bind/named.conf, /etc/bind/named.conf.options, /etc/unbound/unbound.conf]
+
+- name: U0307 공통 서비스 사용 현황 점검 실행
+  ansible.builtin.import_tasks: u0307_check.yml

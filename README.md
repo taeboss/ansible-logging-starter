@@ -9,6 +9,7 @@ journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시�
 
 - [취약점별 조치 현황과 작성 기준](docs/remediation/README.md)
 - [U0207 - /etc/hosts 파일 권한 설정](docs/remediation/U0207.md)
+- [U0307 - 서비스 Banner 관리](docs/remediation/U0307.md)
 - [U0308 - Session Timeout 설정](docs/remediation/U0308.md)
 - [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md)
 - [U0507 - SSH(Secure Shell) 버전 취약성](docs/remediation/U0507.md)
@@ -117,13 +118,14 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 
 ### 자산 진단 체크 취약점별 조치 현황
 
-자산 진단 체크 항목은 취약점 코드별 통합 플레이북과 OS별 Role 태스크로
+자산 진단 체크 항목은 취약점 코드별 실행 플레이북과 OS별 Role 태스크로
 분리한다. 세부 진단 기준, OS별 구현, 실행 명령, 검증 방법과 직접 조치 사항은
 각 조치 항목의 링크 문서에서 확인한다.
 
-| 조치 항목 | 상태 | 통합 플레이북 | OS별 Role 태스크 | 자동 조치 | 직접 조치 |
+| 조치 항목 | 상태 | 실행 플레이북 | OS별 Role 태스크 | 자동 조치 | 직접 조치 |
 |---|---:|---|---|---|---|
 | [U0207 - /etc/hosts 파일 권한 설정](docs/remediation/U0207.md) | ✅ | `playbooks/controls/U0207.yml` | `u0207_redhat.yml`, `u0207_ubuntu.yml` | 링크 원본을 포함해 root 소유 및 `0600` 이하 권한 설정 | 업무·서비스 계정 이름 해석 확인 |
+| [U0307 - 서비스 Banner 관리](docs/remediation/U0307.md) | 🟡 | `U0307-check.yml`, `U0307-ssh.yml` | `u0307_check_*`, `u0307_ssh_*` | 서비스 사용 현황 점검, 경고문과 SSH 배너 조치 | Telnet·FTP·SMTP·DNS 제품별 조치 |
 | [U0308 - Session Timeout 설정](docs/remediation/U0308.md) | ✅ | `playbooks/controls/U0308.yml` | `u0308_redhat.yml`, `u0308_ubuntu.yml` | 로그인 셸 `TMOUT` 설정 | 새 로그인 세션에서 적용 확인 |
 | [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md) | 🟡 | `playbooks/controls/U0309.yml` | `u0309_redhat.yml`, `u0309_ubuntu.yml` | root SSH 접근 제한, Telnet 현황 확인 | Telnet PAM과 `/etc/securetty` 조치 |
 | [U0507 - SSH(Secure Shell) 버전 취약성](docs/remediation/U0507.md) | 🟡 | `playbooks/controls/U0507.yml` | `u0507_redhat.yml`, `u0507_ubuntu.yml` | 실행 중인 SSH의 설치된 OpenSSH 패키지 최신화 | 신규 접속 확인 후 SSH 서비스 재시작 판단 |
@@ -140,8 +142,8 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 
 | 정책 항목 | 상태 | 관련 플레이북 | Ansible 실행 성격 | 현재 소스 기준 설명 |
 |---|---:|---|---|---|
-| 로그인 전 시스템 정보 비노출 및 인가 사용자 경고 | ✅ | `10-01-apply-login-warning.yml` | 최초 1회 | 고정 문구를 `/etc/issue`, `/etc/issue.net`에 배포하고 SSH Banner를 설정한다. 일반·시리얼 콘솔은 `agetty --nohostname`으로 호스트명을 숨기고 Ubuntu/Debian SSH는 `DebianBanner no`로 배포판 버전 정보를 숨긴다. OpenSSH 프로토콜의 최소 식별정보는 남는다. |
-| 불필요한 로그인 안내문 제거 | 🟡 | `10-01-apply-login-warning.yml` | 최초 1회 | 사전 인증 Banner는 통제하지만 Ubuntu 동적 MOTD와 기타 프로그램별 안내문 제거는 구현하지 않았다. |
+| 로그인 전 시스템 정보 비노출 및 인가 사용자 경고 | ✅ | `controls/U0307-ssh.yml`, `10-01-apply-login-warning.yml` | 최초 1회 | U0307 SSH 조치가 `/etc/issue`, `/etc/issue.net`의 승인 경고문과 SSH Banner·추가 버전 정보 비노출을 관리한다. `10-01`은 일반·시리얼 콘솔의 호스트명을 숨긴다. OpenSSH 프로토콜의 최소 식별정보는 남는다. |
+| 불필요한 로그인 안내문 제거 | 🟡 | `controls/U0307-check.yml` (점검), `controls/U0307-ssh.yml` | 최초 1회 | SSH 사전 인증 Banner는 통제하고 기타 서비스 사용 현황은 점검한다. MOTD는 인증 후 안내문으로 U0307 범위에서 제외하며 Telnet·FTP·SMTP·DNS 제품별 안내문은 직접 조치한다. |
 | 로그 및 감사 기록의 관리자 전용 관리 | 🟡 | `10-03-apply-local-logging.yml`, `10-04-apply-audit.yml` | 최초 1회 | `logadmin` 그룹, `/var/log/compliance`, audit 규칙 권한만 구현했다. 관리자 명단, 전체 로그 권한과 sudo 정책이 필요하다. |
 | chrony 기반 외부 NTP 동기화 | ✅ | `10-02-apply-ntp.yml` | 최초 1회 | `time.kaist.ac.kr`, `time.nist.gov`을 사용하도록 chrony를 설치·설정한다. Ubuntu/Debian은 apt 캐시를 갱신하고 기존 timesyncd/ntpd를 중지·비활성화·마스킹한다. 적용 전에 DNS와 UDP/123 응답을 확인해야 한다. |
 | 월 1회 시간 오차 점검 | 🟡 | `30-monthly-time-check.yml` (점검) | 정기 반복 | 오차 점검 플레이북은 있지만 AWX/AAP·CI·cron 스케줄은 등록되지 않았다. |
@@ -204,6 +206,8 @@ ansible-playbook playbooks/10-04-apply-audit.yml
 ansible-playbook playbooks/10-05-apply-central-logging.yml
 ansible-playbook playbooks/10-99-apply-all-logging.yml
 ansible-playbook playbooks/controls/U0207.yml
+ansible-playbook playbooks/controls/U0307-check.yml
+ansible-playbook playbooks/controls/U0307-ssh.yml
 ansible-playbook playbooks/controls/U0308.yml
 ansible-playbook playbooks/controls/U0309.yml
 ansible-playbook playbooks/controls/U0507.yml
@@ -211,7 +215,7 @@ ansible-playbook playbooks/controls/U0509.yml
 ansible-playbook playbooks/controls/U0510.yml
 ```
 
-U0207·U0308·U0309·U0507·U0509·U0510을 제외한 통합 보안 정책은 별도 Role을
+U0207·U0307·U0308·U0309·U0507·U0509·U0510을 제외한 통합 보안 정책은 별도 Role을
 구현하기 전까지 실행 명령이 존재하지 않는다. audit 규칙 보완과 로그 보존정책 역시
 상세 설계만 추가했으며 아직 실행 Role에는 반영하지 않았다.
 
@@ -352,10 +356,16 @@ ansible-playbook playbooks/03-security-preflight.yml --limit server-01
 
 ## 파일럿 적용
 
-기능별 플레이북을 한 대씩 순서대로 적용하는 방식을 권장합니다. 먼저 로그인 전
-경고와 시스템 정보 비노출 설정을 check mode로 확인합니다.
+기능별 플레이북을 한 대씩 순서대로 적용하는 방식을 권장합니다. 먼저 U0307
+서비스 사용 현황을 읽기 전용으로 점검하고 SSH·콘솔 설정을 check mode로 확인합니다.
 
 ```bash
+ansible-playbook playbooks/controls/U0307-check.yml \
+  --limit server-01
+
+ansible-playbook playbooks/controls/U0307-ssh.yml \
+  --limit server-01 --check --diff
+
 ansible-playbook playbooks/10-01-apply-login-warning.yml \
   --limit server-01 --check --diff
 ```
@@ -365,7 +375,9 @@ ansible-playbook playbooks/10-01-apply-login-warning.yml \
 `sudo`, `sshd -t`를 확인합니다.
 
 ```bash
+ansible-playbook playbooks/controls/U0307-ssh.yml --limit server-01
 ansible-playbook playbooks/10-01-apply-login-warning.yml --limit server-01
+ansible-playbook playbooks/controls/U0307-check.yml --limit server-01
 ```
 
 같은 방식으로 NTP, 로컬 로그와 audit를 각각 check mode로 검토한 뒤 실제
@@ -404,13 +416,15 @@ ansible-playbook playbooks/10-04-apply-audit.yml --limit server-01
 | 접속 확인 | `01-connectivity.yml` | 조건부 반복 | 신규 등록, SSH·sudo·Python 변경, 접속 장애 시 | 없음 |
 | 최초 등록 | `02-register-server.yml` | 최초 1회 | 신규 서버 등록 시 | `reports/inventory/` 최신본 |
 | 정책 적용 전 | `03-security-preflight.yml` | 최초 1회 | 최초 로깅·로그인 정책 적용 전 | `reports/preflight/<날짜>/` |
-| 로그인 전 경고·정보 비노출 | `10-01-apply-login-warning.yml` | 최초 1회 | 최초 구축 시 | 없음 |
+| 콘솔 호스트명 비노출·SSH 상세 로그 | `10-01-apply-login-warning.yml` | 최초 1회 | 최초 구축 시 | 없음 |
 | NTP 시간 동기화 | `10-02-apply-ntp.yml` | 최초 1회 | 최초 구축 시 | 없음 |
 | 로컬 로그 보존 | `10-03-apply-local-logging.yml` | 최초 1회 | 최초 구축 시 | 없음 |
 | audit 감사 규칙 | `10-04-apply-audit.yml` | 최초 1회 | 최초 구축 시 | 없음 |
 | 중앙 로그 전송 | `10-05-apply-central-logging.yml` | 최초 1회 | 중앙 로그 준비 후 | 없음 |
 | 전체 로깅 기준 일괄 적용 | `10-99-apply-all-logging.yml` | 최초 1회 | 전체 항목을 함께 적용할 때 | 없음 |
 | U0207 /etc/hosts 권한 | `controls/U0207.yml` | 최초 1회 | 자산 진단 체크 U0207 조치 시 | 실행 출력 |
+| U0307 서비스 Banner 점검 | `controls/U0307-check.yml` | 조건부 반복 | U0307 조치 전·후 및 사용 현황 확인 시 | 실행 출력 |
+| U0307 SSH Banner 조치 | `controls/U0307-ssh.yml` | 최초 1회 | 자산 진단 체크 U0307 조치 시 | 실행 출력 |
 | U0308 Session Timeout | `controls/U0308.yml` | 최초 1회 | 자산 진단 체크 U0308 조치 시 | 실행 출력 |
 | U0309 root SSH 제한 | `controls/U0309.yml` | 최초 1회 | 자산 진단 체크 U0309 조치 시 | 실행 출력 |
 | U0507 OpenSSH 업데이트 | `controls/U0507.yml` | 조건부 반복 | 자산 진단 체크 U0507 조치 또는 신규 보안 업데이트 시 | 실행 출력 |

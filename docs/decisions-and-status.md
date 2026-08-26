@@ -40,10 +40,10 @@
 - SSH, Python, sudo 연결 사전점검
 - 최초 등록용 OS·보안 관련 서비스·파일시스템·보안 구성요소 현황수집
 - 정책 적용 전 SSH·PAM·계정·audit·로그 용량 사전점검
-- `/etc/issue`, `/etc/issue.net` 경고문
-- SSH Banner와 `LogLevel VERBOSE`
+- U0307 `/etc/issue`, `/etc/issue.net` 경고문과 SSH Banner·추가 버전 정보 비노출
+- SSH `LogLevel VERBOSE`
 - 일반·시리얼 콘솔의 호스트명 비노출
-- Ubuntu/Debian SSH 배포판 버전 정보 비노출
+- U0307 Ubuntu SSH 배포판 버전 정보 비노출
 - chrony 패키지, 설정 및 서비스 관리
 - Ubuntu/Debian apt 캐시 갱신과 기존 시간 동기화 서비스 비활성화
 - auditd 설치와 기본 감사 규칙
@@ -56,6 +56,8 @@
 - 사전점검과 정기점검 보고서의 날짜·실행시각별 보존
 - U0207 `/etc/hosts`와 심볼릭 링크 원본의 소유자·권한 설정 통합 플레이북과 OS별 Role
 - U0207 파일 내용 불변, 일반 계정 이름 해석 검증과 실패 시 권한 자동 복구
+- U0307 서비스 Banner의 사용 현황 점검·SSH 자동 조치 분리 플레이북과 OS별 Role
+- U0307 SSH·Telnet·FTP·SMTP·DNS의 패키지·systemd·프로세스·포트·설정 읽기 전용 현황 확인
 - U0308 Session Timeout의 통합 실행 플레이북, OS별 Role과 공통 검증 태스크
 - U0308의 기존 1~300초 유지와 비정상 기존 지시문 정리, 300초 기준 자동 보정
 - U0309 root SSH 직접 접속 제한의 통합 실행 플레이북과 OS별 Role
@@ -69,6 +71,8 @@
 
 ## 부분 구현
 
+- 서비스 Banner: SSH와 공통 경고문은 자동 조치하지만
+  Telnet·FTP·SMTP·DNS는 제품별 직접 조치가 필요하다.
 - 로그 관리자 통제: 그룹과 일부 파일 권한만 있으며 관리자 명단과 sudo 정책이 없다.
 - 1년 보존: journald 기간은 설정하지만 4GB 제한 및 audit/logrotate 정책 때문에
   전체 로그의 1년 보존을 보장하지 않는다.

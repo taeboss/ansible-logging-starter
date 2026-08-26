@@ -1,0 +1,37 @@
+---
+- name: U0307 Red Hat 계열 점검 항목 설정
+  ansible.builtin.set_fact:
+    u0307_check_profiles:
+      - name: SSH
+        packages: [openssh-server]
+        services: [sshd.service, sshd.socket]
+        port_regex: ':(22)(\s|$)'
+        process_regex: '(^|[ /])sshd([ :]|$)'
+        configs: [/etc/ssh/sshd_config, /etc/issue, /etc/issue.net]
+      - name: Telnet
+        packages: [telnet-server]
+        services: [telnet.service, telnet.socket, 'telnet@.service']
+        port_regex: ':(23)(\s|$)'
+        process_regex: '(^|[ /])(in\.)?telnetd([ :]|$)'
+        configs: [/etc/xinetd.d/telnet, /etc/default/telnetd]
+      - name: FTP
+        packages: [vsftpd, proftpd, pure-ftpd]
+        services: [vsftpd.service, proftpd.service, pure-ftpd.service]
+        port_regex: ':(21)(\s|$)'
+        process_regex: '(^|[ /])(vsftpd|proftpd|pure-ftpd)([ :]|$)'
+        configs: [/etc/vsftpd.conf, /etc/vsftpd/vsftpd.conf, /etc/proftpd.conf, /usr/local/etc/proftpd.conf, /etc/ftpaccess]
+      - name: SMTP
+        packages: [postfix, sendmail, exim]
+        services: [postfix.service, sendmail.service, exim.service]
+        port_regex: ':(25|465|587)(\s|$)'
+        process_regex: '(^|[ /])(postfix|sendmail|exim)([ /:]|$)'
+        configs: [/etc/postfix/main.cf, /etc/mail/sendmail.cf]
+      - name: DNS
+        packages: [bind, unbound]
+        services: [named.service, unbound.service]
+        port_regex: ':(53)(\s|$)'
+        process_regex: '(^|[ /])(named|unbound)([ :]|$)'
+        configs: [/etc/named.conf]
+
+- name: U0307 공통 서비스 사용 현황 점검 실행
+  ansible.builtin.import_tasks: u0307_check.yml

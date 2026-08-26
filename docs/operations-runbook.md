@@ -120,8 +120,8 @@ ansible-playbook playbooks/10-01-apply-login-warning.yml \
   --limit server-01
 ```
 
-새 SSH 세션, `sudo -n id`, `sshd -t`, `sshd -T`의 `banner`와 Ubuntu/Debian의
-`debianbanner`, 새 일반·시리얼 콘솔의 호스트명 비노출을 확인한다. Role은 콘솔
+새 SSH 세션, `sudo -n id`, `sshd -t`, `sshd -T`의 `loglevel VERBOSE`,
+새 일반·시리얼 콘솔의 호스트명 비노출을 확인한다. Role은 콘솔
 사용자를 강제로 종료하지 않고 systemd 설정만 다시 읽으므로, 이미 대기 중인
 콘솔은 로그아웃 후 새 getty가 시작되거나 재부팅된 뒤 변경된 로그인 프롬프트가
 표시된다.
@@ -167,6 +167,23 @@ apt 캐시를 갱신하고, 기존 `systemd-timesyncd`, `ntp`, `ntpd` unit이 �
 4. 기존 관리자 세션과 콘솔 복구 경로를 유지한 상태에서 실제 적용한다.
 5. 상세 문서의 검증 절차를 완료한 후 다음 서버로 진행한다.
 6. 직접 조치 항목은 자동 조치와 구분하여 서버 담당자가 별도로 수행한다.
+
+U0307은 서비스 사용 현황 점검과 SSH 자동 조치를 분리한다. 점검
+플레이북은 패키지·systemd·프로세스·LISTEN 포트·설정 파일을 읽기 전용으로
+확인한다. SSH 플레이북은 경고문과 SSH 배너 정보를 자동 조치한다.
+
+```bash
+ansible-playbook playbooks/controls/U0307-check.yml \
+  --limit TARGET
+
+ansible-playbook playbooks/controls/U0307-ssh.yml \
+  --limit TARGET --check --diff
+```
+
+실제 적용 후 `U0307-check.yml`을 다시 실행하고 새 SSH 세션에서 인증 전
+경고문과 정상 접속을 확인한다. 나머지
+서비스는 실제 사용 제품과 업무 영향을 확인한 후 직접 조치한다. 상세
+기준은 `docs/remediation/U0307.md`에서 확인한다.
 
 U0308은 `/etc/profile`에 Session Timeout 기준을 적용한다. 기존 1~300초 값은
 유지하고, 300초를 초과하거나 비정상인 기존 활성 지시문은 관리 블록으로 통합한다.

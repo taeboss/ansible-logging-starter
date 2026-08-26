@@ -1,0 +1,39 @@
+---
+- name: U0307 SSH 서비스 Banner 자동 조치
+  hosts: linux_servers
+  gather_facts: true
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+
+  pre_tasks:
+    - name: U0307 SSH 조치 지원 운영체제 확인
+      ansible.builtin.assert:
+        that:
+          - >-
+            ansible_facts['os_family'] == 'RedHat'
+            or ansible_facts['distribution'] == 'Ubuntu'
+        fail_msg: >-
+          U0307 SSH 조치를 지원하지 않는 OS입니다:
+          {{ ansible_facts['distribution'] }}
+          {{ ansible_facts['distribution_version'] }}
+
+    - name: U0307 승인 경고문 확인
+      ansible.builtin.assert:
+        that:
+          - login_warning_text is defined
+          - login_warning_text | trim | length > 0
+        fail_msg: inventory/group_vars/all.yml의 login_warning_text를 설정해야 합니다.
+
+  tasks:
+    - name: U0307 Red Hat 계열 SSH 조치 실행
+      ansible.builtin.include_role:
+        name: security_controls
+        tasks_from: u0307_ssh_redhat
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: U0307 Ubuntu SSH 조치 실행
+      ansible.builtin.include_role:
+        name: security_controls
+        tasks_from: u0307_ssh_ubuntu
+      when: ansible_facts['distribution'] == 'Ubuntu'

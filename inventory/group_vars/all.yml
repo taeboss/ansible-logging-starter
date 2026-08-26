@@ -5,8 +5,22 @@ ansible_become: true
 
 # 승인된 고정 문구만 사용합니다. 호스트명, OS, 버전 변수는 넣지 않습니다.
 login_warning_text: |
-  WARNING: Authorized users only.
-  All activities may be monitored and recorded.
+  ############################################################
+  # This system is for the use of authorized users only.
+  # Individuals using this computer system without authority, or in
+  # excess of their authority, are subject to having all of their
+  # activities on this system monitored and recorded by system
+  # personnel.
+  #
+  # In the course of monitoring individuals improperly using this
+  # system, or in the course of system maintenance, the activities
+  # of authorized users may also be monitored.
+  #
+  # Anyone using this system expressly consents to such monitoring
+  # and is advised that if such monitoring reveals possible evidence
+  # of criminal activity, system personnel may provide the evidence
+  # of such monitoring to law enforcement officials.
+  ############################################################
 
 log_admin_group: logadmin
 # 전체 대상 서버에 동일하게 적용할 단일 프로필입니다.
