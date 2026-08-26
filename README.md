@@ -258,34 +258,112 @@ Ansible 플레이북은 같은 상태를 다시 적용해도 불필요한 변경
 
 bootstrap 진입 방법은 다음 두 가지 중에서 선택합니다.
 
+부트스트랩용 `inventory/bootstrap/hosts.yml`과 부트스트랩 완료 후 사용하는
+운영용 `inventory/hosts.yml`은 경로와 용도가 서로 다른 별도 파일이며 자동으로
+동기화되지 않습니다.
+
 ### 방식 1: hosts.yml과 서버별 Vault로 일괄 실행
 
 서버 IP와 기존 관리자 계정명은 `hosts.yml`에, 서로 다른 SSH·sudo 암호는
 서버별 Ansible Vault 파일에 저장합니다. `hosts.yml`과 `host_vars/`는 모두
 Git에서 제외됩니다.
 
+기존 서버마다 관리자 계정과 암호가 다르므로 서버별 자격증명을 정확히 연결하기
+위해 인벤토리의 호스트 별칭마다 `vault.yml`을 하나씩 사용합니다. 예를 들어
+서버가 200대이면 `vault.yml`도 200개가 필요합니다. 하나의 파일에 모든 서버
+암호를 모으는 것보다 서버 추가·암호 변경 범위가 분명하고, 다른 서버의 암호를
+잘못 적용할 가능성을 줄일 수 있습니다.
+
+먼저 예제 인벤토리를 복사하고 서버별 고유 별칭, 실제 IP와 기존 관리자 계정을
+입력합니다. 호스트 별칭은 전체 인벤토리에서 중복되면 안 됩니다.
+
 ```bash
 cp inventory/bootstrap/hosts.example.yml inventory/bootstrap/hosts.yml
-# hosts.yml에 서버 IP와 bootstrap_initial_user 입력
+```
 
+```yaml
+all:
+  children:
+    bootstrap_servers:
+      hosts:
+        server-001:
+          ansible_host: 192.0.2.101
+          bootstrap_initial_user: existing_admin_01
+        server-002:
+          ansible_host: 192.0.2.102
+          bootstrap_initial_user: existing_admin_02
+```
+
+각 `host_vars` 디렉터리 이름은 `hosts.yml`의 호스트 별칭과 정확히 같아야
+합니다. 모든 서버의 Vault 디렉터리를 `host_vars` 바로 아래에 두면 Ansible이
+호스트 별칭을 기준으로 자동 연결합니다.
+
+```text
+inventory/bootstrap/host_vars/
+├── server-001/vault.yml
+└── server-002/vault.yml
+```
+
+다음 명령으로 서버별 Vault 파일을 생성합니다.
+
+```bash
 mkdir -p inventory/bootstrap/host_vars/server-001
-ansible-vault create inventory/bootstrap/host_vars/server-001/vault.yml
+ansible-vault create \
+  inventory/bootstrap/host_vars/server-001/vault.yml
+
+mkdir -p inventory/bootstrap/host_vars/server-002
+ansible-vault create \
+  inventory/bootstrap/host_vars/server-002/vault.yml
 ```
 
 Vault 파일에는 해당 서버의 기존 관리자 자격증명만 입력합니다.
 
 ```yaml
+---
 ansible_password: "기존 관리자 SSH 암호"
 ansible_become_password: "기존 관리자 sudo 암호"
 ```
 
-모든 서버의 Vault 파일을 같은 Vault 암호로 만들면 다음 명령 한 번으로
-서버마다 서로 다른 자격증명을 사용하여 기본 10대씩 처리할 수 있습니다.
+`ansible_password`는 기존 관리자 계정의 SSH 암호이고,
+`ansible_become_password`는 해당 계정의 sudo 암호입니다. 두 암호가 같으면
+같은 값을 입력합니다. `ansible-vault create`가 요구하는 Vault 암호는 서버
+로그인 암호가 아니라 `vault.yml`을 암호화하고 해제하는 별도 암호입니다.
+
+모든 서버의 Vault 파일을 같은 Vault 암호로 생성하면 한 번의 암호 입력으로
+전체 파일을 해제하여 일괄 실행할 수 있습니다. 파일이 암호화됐는지 확인하거나
+내용을 다시 확인·수정할 때는 다음 명령을 사용합니다.
+
+```bash
+head -1 inventory/bootstrap/host_vars/server-001/vault.yml
+ansible-vault view inventory/bootstrap/host_vars/server-001/vault.yml
+ansible-vault edit inventory/bootstrap/host_vars/server-001/vault.yml
+```
+
+첫 줄이 `$ANSIBLE_VAULT;1.1;AES256`과 같은 형식이면 암호화된 상태입니다.
+인벤토리와 서버별 변수가 정상적으로 연결됐는지 먼저 확인합니다.
+
+```bash
+ansible-inventory -i inventory/bootstrap/hosts.yml \
+  --graph --ask-vault-pass
+```
+
+확인 후 다음 명령 한 번으로 서버마다 서로 다른 자격증명을 사용하여 기본
+10대씩 처리합니다. 처음에는 `--limit`으로 시험 서버 한 대를 적용한 뒤 전체
+대상으로 확대합니다.
+
+```bash
+ansible-playbook -i inventory/bootstrap/hosts.yml \
+  playbooks/00-bootstrap-access.yml --ask-vault-pass \
+  --limit server-001
+```
 
 ```bash
 ansible-playbook -i inventory/bootstrap/hosts.yml \
   playbooks/00-bootstrap-access.yml --ask-vault-pass
 ```
+
+Vault 암호, 평문 자격증명 복사본과 `inventory/bootstrap/` 아래의 실제
+인벤토리·`host_vars`는 Git에 저장하지 않습니다.
 
 ### 방식 2: hosts.yml 없이 IP를 한 대씩 직접 지정
 
