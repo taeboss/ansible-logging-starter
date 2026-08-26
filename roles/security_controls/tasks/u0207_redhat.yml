@@ -1,0 +1,146 @@
+---
+- name: U0207 Red Hat 계열 확인
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'RedHat'
+    fail_msg: >-
+      U0207 Red Hat 계열 조치를 지원하지 않는 OS입니다:
+      {{ ansible_facts['distribution'] }}
+      {{ ansible_facts['distribution_version'] }}
+
+- name: U0207 Red Hat 계열 /etc/hosts 링크 상태 확인
+  ansible.builtin.stat:
+    path: /etc/hosts
+    follow: false
+  register: u0207_hosts_lstat
+
+- name: U0207 Red Hat 계열 /etc/hosts 조치 가능 여부 확인
+  ansible.builtin.assert:
+    that:
+      - u0207_hosts_lstat.stat.exists | default(false)
+      - >-
+        (u0207_hosts_lstat.stat.isreg | default(false))
+        or (u0207_hosts_lstat.stat.islnk | default(false))
+    fail_msg: /etc/hosts가 일반 파일 또는 심볼릭 링크가 아니어서 자동 조치를 중단합니다.
+
+- name: U0207 Red Hat 계열 변경 전 /etc/hosts 원본 상태 확인
+  ansible.builtin.stat:
+    path: /etc/hosts
+    follow: true
+    get_checksum: true
+    checksum_algorithm: sha256
+  register: u0207_hosts_before
+
+- name: U0207 Red Hat 계열 /etc/hosts 원본 파일 확인
+  ansible.builtin.assert:
+    that:
+      - u0207_hosts_before.stat.exists | default(false)
+      - u0207_hosts_before.stat.isreg | default(false)
+    fail_msg: /etc/hosts 링크가 가리키는 원본이 일반 파일이 아니거나 존재하지 않습니다.
+
+- name: U0207 Red Hat 계열 변경 전 일반 계정 이름 해석 확인
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/getent
+      - hosts
+      - "{{ ansible_hostname }}"
+  register: u0207_getent_before
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: false
+
+- name: U0207 Red Hat 계열 /etc/hosts 권한 조치
+  block:
+    - name: U0207 Red Hat 계열 /etc/hosts 소유자 root 설정
+      ansible.builtin.file:
+        path: /etc/hosts
+        state: file
+        follow: true
+        owner: root
+      register: u0207_owner_result
+      when: u0207_hosts_before.stat.uid != 0
+
+    - name: U0207 Red Hat 계열 /etc/hosts 권한 0600 설정
+      ansible.builtin.file:
+        path: /etc/hosts
+        state: file
+        follow: true
+        mode: "0600"
+      register: u0207_mode_result
+      when: u0207_hosts_before.stat.mode not in ['0400', '0600']
+
+    - name: U0207 Red Hat 계열 변경 후 /etc/hosts 상태 확인
+      ansible.builtin.stat:
+        path: /etc/hosts
+        follow: true
+        get_checksum: true
+        checksum_algorithm: sha256
+      register: u0207_hosts_after
+
+    - name: U0207 Red Hat 계열 /etc/hosts 내용 유지 검증
+      ansible.builtin.assert:
+        that:
+          - u0207_hosts_after.stat.checksum == u0207_hosts_before.stat.checksum
+        fail_msg: /etc/hosts 파일 내용이 변경되어 자동 조치를 중단합니다.
+
+    - name: U0207 Red Hat 계열 /etc/hosts 소유자 권한 검증
+      ansible.builtin.assert:
+        that:
+          - u0207_hosts_after.stat.uid == 0
+          - u0207_hosts_after.stat.mode in ['0400', '0600']
+        fail_msg: /etc/hosts 소유자 또는 권한 검증에 실패했습니다.
+      when: not ansible_check_mode
+
+    - name: U0207 Red Hat 계열 변경 후 일반 계정 이름 해석 확인
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/getent
+          - hosts
+          - "{{ ansible_hostname }}"
+      register: u0207_getent_after
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      become: false
+
+    - name: U0207 Red Hat 계열 일반 계정 이름 해석 검증
+      ansible.builtin.assert:
+        that:
+          - u0207_getent_before.rc != 0 or u0207_getent_after.rc == 0
+        fail_msg: >-
+          /etc/hosts 권한 변경 후 기존에 가능했던 일반 계정 호스트명 조회가 실패했습니다.
+
+  rescue:
+    - name: U0207 Red Hat 계열 /etc/hosts 기존 소유자 권한 복구
+      ansible.builtin.file:
+        path: /etc/hosts
+        state: file
+        follow: true
+        owner: "{{ u0207_hosts_before.stat.uid }}"
+        mode: "{{ u0207_hosts_before.stat.mode }}"
+      failed_when: false
+
+    - name: U0207 Red Hat 계열 자동 복구 후 중단
+      ansible.builtin.fail:
+        msg: /etc/hosts 검증 실패로 변경 전 소유자와 권한 복구를 시도했습니다.
+
+- name: U0207 Red Hat 계열 적용 결과 안내
+  ansible.builtin.debug:
+    msg:
+      - >-
+        심볼릭 링크 여부: {{ u0207_hosts_lstat.stat.islnk | default(false) }},
+        링크 원본: {{ u0207_hosts_lstat.stat.lnk_target | default('/etc/hosts') }}
+      - >-
+        변경 전: owner={{ u0207_hosts_before.stat.pw_name
+        | default(u0207_hosts_before.stat.uid) }},
+        mode={{ u0207_hosts_before.stat.mode }}
+      - >-
+        변경 후: owner={{ u0207_hosts_after.stat.pw_name
+        | default(u0207_hosts_after.stat.uid) }},
+        mode={{ u0207_hosts_after.stat.mode }}
+      - "내용 SHA-256 유지: {{ u0207_hosts_after.stat.checksum == u0207_hosts_before.stat.checksum }}"
+      - >-
+        소유자 변경 여부: {{ u0207_owner_result.changed | default(false) }},
+        권한 변경 여부: {{ u0207_mode_result.changed | default(false) }}
+      - 서비스 재시작과 서버 재부팅은 필요하지 않습니다.
