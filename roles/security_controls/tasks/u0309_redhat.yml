@@ -2,10 +2,11 @@
 - name: U0309 Red Hat 계열 확인
   ansible.builtin.assert:
     that:
-      - ansible_os_family == 'RedHat'
+      - ansible_facts['os_family'] == 'RedHat'
     fail_msg: >-
       U0309 Red Hat 계열 조치를 지원하지 않는 OS입니다:
-      {{ ansible_distribution }} {{ ansible_distribution_version }}
+      {{ ansible_facts['distribution'] }}
+      {{ ansible_facts['distribution_version'] }}
 
 - name: U0309 Red Hat 계열 SSH 서비스 정보 설정
   ansible.builtin.set_fact:

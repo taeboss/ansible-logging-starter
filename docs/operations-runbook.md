@@ -159,11 +159,11 @@ apt 캐시를 갱신하고, 기존 `systemd-timesyncd`, `ntp`, `ntpd` unit이 �
 ## 자산 진단 체크 취약점별 조치
 
 취약점별 조치는 `docs/remediation/README.md`에서 구현 상태를 확인한 뒤 해당
-코드의 상세 문서와 OS별 플레이북을 사용한다.
+코드의 상세 문서와 통합 플레이북을 사용한다.
 
 1. 진단 결과의 취약점 코드, 대상 서버와 OS를 확인한다.
 2. 상세 문서에서 진단 기준, 자동 조치, 직접 조치와 롤백 방법을 확인한다.
-3. 대상 한 대에서 OS별 플레이북을 `--check --diff`로 실행한다.
+3. 대상 한 대에서 통합 플레이북을 `--check --diff`로 실행한다.
 4. 기존 관리자 세션과 콘솔 복구 경로를 유지한 상태에서 실제 적용한다.
 5. 상세 문서의 검증 절차를 완료한 후 다음 서버로 진행한다.
 6. 직접 조치 항목은 자동 조치와 구분하여 서버 담당자가 별도로 수행한다.
@@ -173,25 +173,19 @@ U0308은 `/etc/profile`에 Session Timeout 기준을 적용한다. 기존 1~300�
 미설정·0·비숫자·300초 초과 값의 최종 유효값은 300초로 보정한다.
 
 ```bash
-ansible-playbook playbooks/controls/U0308-redhat.yml \
-  --limit REDHAT_TARGET --check --diff
-
-ansible-playbook playbooks/controls/U0308-ubuntu.yml \
-  --limit UBUNTU_TARGET --check --diff
+ansible-playbook playbooks/controls/U0308.yml \
+  --limit TARGET --check --diff
 ```
 
 적용 후 새 로그인 세션에서 `TMOUT`이 1~300인지 확인한다. 기존 로그인 세션은
 유지되며 서비스 재시작과 서버 재부팅은 필요하지 않다. 상세 기준은
 `docs/remediation/U0308.md`에서 확인한다.
 
-U0309는 다음 플레이북을 사용하며 자체적으로 한 번에 한 서버만 처리한다.
+U0309는 다음 통합 플레이북을 사용하며 자체적으로 한 번에 한 서버만 처리한다.
 
 ```bash
-ansible-playbook playbooks/controls/U0309-redhat.yml \
-  --limit REDHAT_TARGET --check --diff
-
-ansible-playbook playbooks/controls/U0309-ubuntu.yml \
-  --limit UBUNTU_TARGET --check --diff
+ansible-playbook playbooks/controls/U0309.yml \
+  --limit TARGET --check --diff
 ```
 
 SSH 자동 조치와 Telnet 직접 조치 절차는
@@ -202,12 +196,12 @@ U0510은 현재 설치된 OpenSSL 관련 패키지만 공식 저장소의 최신
 업데이트한다. 전체 OS 업그레이드, 서비스 재시작과 서버 재부팅은 수행하지 않는다.
 
 ```bash
-ansible-playbook playbooks/controls/U0510-redhat.yml \
-  --limit REDHAT_TARGET --check --diff
-
-ansible-playbook playbooks/controls/U0510-ubuntu.yml \
-  --limit UBUNTU_TARGET --check --diff
+ansible-playbook playbooks/controls/U0510.yml \
+  --limit TARGET --check --diff
 ```
+
+각 통합 플레이북은 facts로 Red Hat 계열과 Ubuntu를 판별해 해당 OS Role
+태스크를 실행한다. 지원하지 않는 OS는 오류로 종료한다.
 
 실제 적용 후 출력되는 패키지 버전과 재부팅 필요 여부를 검토하고, 업무 영향도를
 확인한 뒤 필요한 서비스 재시작 또는 서버 재부팅을 별도 작업으로 수행한다.
