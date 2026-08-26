@@ -122,7 +122,7 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 
 | 조치 방법 | 상태 | 통합 플레이북 | OS별 Role 태스크 | 자동 조치 | 직접 조치 |
 |---|---:|---|---|---|---|
-| [U0308 - Session Timeout 설정](docs/remediation/U0308.md) | ✅ | `playbooks/controls/U0308.yml` | `u0308_redhat.yml`, `u0308_ubuntu.yml` | `/etc/profile`의 비정상 `TMOUT` 지시문을 정리한다. 유효값이 없거나 0·비숫자·300초 초과이면 300초로 설정하고, 기존 1~300초는 유지한다. | 없음. 새 로그인 세션에서 적용 여부 확인 |
+| [U0308 - Session Timeout 설정](docs/remediation/U0308.md) | ✅ | `playbooks/controls/U0308.yml` | `u0308_redhat.yml`, `u0308_ubuntu.yml` | `/etc/profile`의 비정상 `TMOUT` 지시문을 정리한다. 유효값이 없거나 0·비숫자·300초 초과이면 300초로 설정하고, 기존 1초 이상 300초 이하 값은 유지한다. | 없음. 새 로그인 세션에서 적용 여부 확인 |
 | [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md) | 🟡 | `playbooks/controls/U0309.yml` | `u0309_redhat.yml`, `u0309_ubuntu.yml` | SSH: `PermitRootLogin no`, `PermitEmptyPasswords no`, 구문·유효 설정·서비스 상태 검증 | Telnet: 직접 조치 필요. 플레이북은 TCP/23, `/etc/pam.d/login`, `/etc/securetty` 현황만 확인한다. |
 | [U0509 - glibc 버전 취약성](docs/remediation/U0509.md) | 🟡 | `playbooks/controls/U0509.yml` | `u0509_redhat.yml`, `u0509_ubuntu.yml` | 설치된 glibc 관련 패키지를 OS 공식 저장소의 최신 버전으로 업데이트하고 추가 업데이트 여부를 검증한다. GCC는 현황만 확인한다. | 업무 서비스 영향 확인 후 필요한 서비스 재시작 또는 서버 재부팅 |
 | [U0510 - OpenSSL 버전 취약성](docs/remediation/U0510.md) | 🟡 | `playbooks/controls/U0510.yml` | `u0510_redhat.yml`, `u0510_ubuntu.yml` | 설치된 OpenSSL 실행 패키지와 라이브러리를 OS 공식 저장소의 최신 버전으로 업데이트하고 추가 업데이트 여부를 검증한다. | 업무 서비스 영향 확인 후 필요한 서비스 재시작 또는 서버 재부팅 |
@@ -132,9 +132,9 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 구현하지 않은 잔여 범위만 남긴다.
 
 U0308은 `/etc/profile` 끝의 전용 관리 블록에서 새 로그인 셸의 `TMOUT`을
-1~300초로 제한한다. 미설정·0·비숫자·300초 초과 값은 300초로 보정하고,
+1초 이상 300초 이하로 제한한다. 미설정·0·비숫자·300초 초과 값은 300초로 보정하고,
 300초를 초과하거나 비정상인 기존 활성 지시문은 관리 블록 밖에서 제거한다.
-기존 1~300초 값은 유지한다. 서비스 재시작과 재부팅은 필요하지 않다.
+기존 1초 이상 300초 이하 값은 유지한다. 서비스 재시작과 재부팅은 필요하지 않다.
 
 ```bash
 ansible-playbook playbooks/controls/U0308.yml \
