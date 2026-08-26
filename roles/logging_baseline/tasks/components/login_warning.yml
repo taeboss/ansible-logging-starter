@@ -1,22 +1,4 @@
 ---
-- name: 콘솔 로그인 전 경고문 설치
-  ansible.builtin.template:
-    src: issue.j2
-    dest: /etc/issue
-    owner: root
-    group: root
-    mode: "0644"
-    backup: true
-
-- name: SSH 로그인 전 경고문 설치
-  ansible.builtin.template:
-    src: issue.j2
-    dest: /etc/issue.net
-    owner: root
-    group: root
-    mode: "0644"
-    backup: true
-
 - name: 콘솔 로그인 프로그램의 호스트명 비노출 지원 확인
   ansible.builtin.command: /sbin/agetty --help
   register: agetty_help
@@ -99,37 +81,13 @@
     - console_hide_hostname | bool
     - not ansible_check_mode
 
-- name: SSH 경고문과 상세 인증 로그 설정
+- name: SSH 상세 인증 로그 설정
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
-    regexp: "{{ item.regexp }}"
-    line: "{{ item.line }}"
+    regexp: '^\s*#?\s*LogLevel\s+'
+    line: 'LogLevel VERBOSE'
     backup: true
     validate: /usr/sbin/sshd -t -f %s
-  loop:
-    - { regexp: '^\s*#?\s*Banner\s+', line: 'Banner /etc/issue.net' }
-    - { regexp: '^\s*#?\s*LogLevel\s+', line: 'LogLevel VERBOSE' }
-  notify: Reload SSH
-
-- name: Ubuntu/Debian SSH 배포판 버전 기존 설정 제거
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^\s*#?\s*DebianBanner\s+'
-    state: absent
-    backup: true
-    validate: /usr/sbin/sshd -t -f %s
-  when: ansible_os_family == 'Debian'
-  notify: Reload SSH
-
-- name: Ubuntu/Debian SSH 배포판 버전 비노출 설정
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    line: 'DebianBanner no'
-    insertbefore: '^\s*(Include|Match)\s+'
-    firstmatch: true
-    backup: true
-    validate: /usr/sbin/sshd -t -f %s
-  when: ansible_os_family == 'Debian'
   notify: Reload SSH
 
 - name: SSH 유효 설정 조회
@@ -138,12 +96,9 @@
   changed_when: false
   when: not ansible_check_mode
 
-- name: 로그인 전 SSH 비노출 설정 검증
+- name: SSH 상세 인증 로그 유효 설정 검증
   ansible.builtin.assert:
     that:
-      - "'banner /etc/issue.net' in ssh_effective_configuration.stdout_lines"
-      - >-
-        ansible_os_family != 'Debian' or
-        'debianbanner no' in ssh_effective_configuration.stdout_lines
-    fail_msg: SSH Banner 또는 DebianBanner 유효 설정이 예상과 다릅니다.
+      - "'loglevel VERBOSE' in ssh_effective_configuration.stdout_lines"
+    fail_msg: SSH LogLevel 유효 설정이 VERBOSE가 아닙니다.
   when: not ansible_check_mode

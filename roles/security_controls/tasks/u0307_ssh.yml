@@ -1,0 +1,128 @@
+---
+- name: U0307 공통 로그인 경고문 파일 적용
+  ansible.builtin.template:
+    src: u0307-warning-banner.j2
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop:
+    - /etc/issue
+    - /etc/issue.net
+
+- name: U0307 SSH 실행 파일 확인
+  ansible.builtin.stat:
+    path: /usr/sbin/sshd
+  register: u0307_sshd_binary
+
+- name: U0307 SSH 서비스 상태 확인
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - "{{ u0307_ssh_service_unit }}"
+  register: u0307_ssh_service_before
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: U0307 SSH 자동 조치 대상 결정
+  ansible.builtin.set_fact:
+    u0307_ssh_active: >-
+      {{ (u0307_sshd_binary.stat.exists | default(false))
+         and (u0307_sshd_binary.stat.executable | default(false))
+         and u0307_ssh_service_before.rc == 0
+         and (u0307_ssh_service_before.stdout | trim) == 'active' }}
+
+- name: U0307 SSH 서비스 배너 조치
+  when: u0307_ssh_active
+  block:
+    - name: U0307 변경 전 SSH 설정 구문 검사
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -t
+      changed_when: false
+      check_mode: false
+
+    - name: U0307 변경 전 SSH 유효 배너 설정 조회
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+      register: u0307_ssh_effective_before
+      changed_when: false
+      check_mode: false
+
+    - name: U0307 SSH 경고문 및 추가 버전 정보 비노출 설정
+      ansible.builtin.blockinfile:
+        path: /etc/ssh/sshd_config
+        marker: "# {mark} ANSIBLE MANAGED U0307"
+        block: "{{ u0307_ssh_config_block }}"
+        insertbefore: BOF
+        backup: true
+        validate: /usr/sbin/sshd -t -f %s
+      register: u0307_ssh_config_result
+
+    - name: U0307 변경 후 SSH 유효 배너 설정 조회
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+      register: u0307_ssh_effective_after
+      changed_when: false
+      check_mode: false
+      when: not ansible_check_mode
+
+    - name: U0307 SSH 유효 배너 설정 검증
+      ansible.builtin.assert:
+        that:
+          - "'banner /etc/issue.net' in u0307_ssh_effective_after.stdout_lines"
+          - "'versionaddendum none' in u0307_ssh_effective_after.stdout_lines"
+          - >-
+            ansible_facts['distribution'] != 'Ubuntu'
+            or 'debianbanner no' in u0307_ssh_effective_after.stdout_lines
+        fail_msg: SSH 유효 배너 설정이 U0307 기준과 다릅니다.
+      when: not ansible_check_mode
+
+    - name: U0307 SSH 설정 다시 불러오기
+      ansible.builtin.service:
+        name: "{{ u0307_ssh_service_name }}"
+        state: reloaded
+      when:
+        - not ansible_check_mode
+        - u0307_ssh_config_result.changed
+
+    - name: U0307 SSH 서비스 변경 후 상태 확인
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ u0307_ssh_service_unit }}"
+      register: u0307_ssh_service_after
+      changed_when: false
+      check_mode: false
+      when: not ansible_check_mode
+
+    - name: U0307 SSH 서비스 변경 후 상태 검증
+      ansible.builtin.assert:
+        that:
+          - u0307_ssh_service_after.rc == 0
+          - u0307_ssh_service_after.stdout | trim == 'active'
+        fail_msg: "{{ u0307_ssh_service_unit }}가 U0307 적용 후 active 상태가 아닙니다."
+      when: not ansible_check_mode
+
+- name: U0307 SSH 자동 조치 결과 안내
+  ansible.builtin.debug:
+    msg:
+      - "SSH 서비스 실행 여부: {{ u0307_ssh_active }}"
+      - >-
+        SSH 변경 전: {{ u0307_ssh_effective_before.stdout_lines
+        | default([]) | select('match', '^(banner|versionaddendum|debianbanner) ')
+        | list }}
+      - >-
+        SSH 목표 설정: banner /etc/issue.net, versionaddendum none{{
+        ', debianbanner no' if ansible_facts['distribution'] == 'Ubuntu' else '' }}
+      - SSH가 실행 중이 아니면 `/etc/issue`·`/etc/issue.net` 경고문만 적용하고 SSH 설정은 변경하지 않습니다.
+      - OpenSSH 프로토콜의 기본 제품·버전 식별 문자열은 설정만으로 완전히 제거할 수 없습니다.

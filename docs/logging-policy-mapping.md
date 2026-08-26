@@ -7,8 +7,8 @@ Ansible 설정, 정기 점검, 외부 시스템 영역으로 나누어 관리한
 
 | 정책 | Ansible 구현 | 현재 상태 | 외부 또는 사람의 역할 |
 |---|---|---|---|
-| 로그인 전 시스템 정보 비노출 | 고정 `/etc/issue`, `/etc/issue.net`, SSH Banner, 콘솔 `agetty --nohostname`, Ubuntu/Debian `DebianBanner no` | 구현 | OpenSSH 프로토콜 최소 식별정보는 예외로 관리하고 승인 경고문을 확정한다. |
-| 인가 사용자 전용 경고 | `login_warning_text` 변수 | 구현 | 법무·보안 문구 승인 |
+| 로그인 전 시스템 정보 비노출 | `U0307-ssh.yml`의 `/etc/issue`, `/etc/issue.net`, SSH Banner·`VersionAddendum`·`DebianBanner`; `10-01`의 콘솔 `agetty --nohostname` | 부분 구현 | `U0307-check.yml`로 기타 서비스 사용 현황을 확인한다. OpenSSH 기본 식별정보와 Telnet·FTP·SMTP·DNS 제품별 배너는 직접 조치 범위로 관리한다. MOTD는 인증 후 안내문으로 U0307 점검·조치 범위에서 제외한다. |
+| 인가 사용자 전용 경고 | `U0307-ssh.yml`이 `login_warning_text`를 사전 인증 경고문으로 배포 | 구현 | 법무·보안 문구 승인 |
 | 로그 관리자만 관리 | 그룹·파일 권한·sudo 정책 | 부분 구현 | 관리자 명단과 권한 승인 |
 | 공인 NTP 동기화 | chrony 템플릿과 서비스 | 구현 | 외부 서버 사용 승인·가용성 확인 |
 | 월 1회 시간 오차 점검 | `30-monthly-time-check.yml` | 부분 구현 | 플레이북 구현 완료, AWX/CI 스케줄 등록 필요 |
