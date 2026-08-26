@@ -1,0 +1,32 @@
+---
+- name: U0509 glibc 최신 패키지 적용
+  hosts: linux_servers
+  gather_facts: true
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+
+  pre_tasks:
+    - name: U0509 지원 운영체제 확인
+      ansible.builtin.assert:
+        that:
+          - >-
+            ansible_facts['os_family'] == 'RedHat'
+            or ansible_facts['distribution'] == 'Ubuntu'
+        fail_msg: >-
+          U0509 조치를 지원하지 않는 OS입니다:
+          {{ ansible_facts['distribution'] }}
+          {{ ansible_facts['distribution_version'] }}
+
+  tasks:
+    - name: U0509 Red Hat 계열 조치 실행
+      ansible.builtin.include_role:
+        name: security_controls
+        tasks_from: u0509_redhat
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: U0509 Ubuntu 조치 실행
+      ansible.builtin.include_role:
+        name: security_controls
+        tasks_from: u0509_ubuntu
+      when: ansible_facts['distribution'] == 'Ubuntu'
