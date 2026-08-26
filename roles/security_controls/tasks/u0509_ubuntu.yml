@@ -1,0 +1,143 @@
+---
+- name: U0509 Ubuntu 확인
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+    fail_msg: >-
+      U0509 Ubuntu 조치를 지원하지 않는 OS입니다:
+      {{ ansible_facts['distribution'] }}
+      {{ ansible_facts['distribution_version'] }}
+
+- name: U0509 Ubuntu 설치 패키지 정보 수집
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: U0509 Ubuntu glibc 조치 대상 패키지 결정
+  ansible.builtin.set_fact:
+    u0509_glibc_packages: >-
+      {{
+        ansible_facts.packages.keys()
+        | select('match', '^(libc6($|-)|libc-bin$|libc-dev-bin$|locales($|-)|nscd$)')
+        | list
+        | sort
+      }}
+
+- name: U0509 Ubuntu glibc 설치 상태 확인
+  ansible.builtin.assert:
+    that:
+      - u0509_glibc_packages | length > 0
+    fail_msg: libc6 또는 glibc 관련 패키지가 설치되어 있지 않아 U0509 자동 조치 대상이 아닙니다.
+
+- name: U0509 Ubuntu GCC 실행 파일 상태 확인
+  ansible.builtin.stat:
+    path: /usr/bin/gcc
+  register: u0509_gcc_binary
+
+- name: U0509 Ubuntu 변경 전 패키지 버전 조회
+  ansible.builtin.command:
+    argv: >-
+      {{ ['dpkg-query', '-W', '-f=${binary:Package}\t${Version}\n']
+         + u0509_glibc_packages }}
+  register: u0509_packages_before
+  changed_when: false
+  check_mode: false
+
+- name: U0509 Ubuntu 변경 전 glibc 실행 버전 조회
+  ansible.builtin.command:
+    argv:
+      - getconf
+      - GNU_LIBC_VERSION
+  register: u0509_glibc_before
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: U0509 Ubuntu glibc 관련 패키지 최신 업데이트
+  ansible.builtin.apt:
+    name: "{{ u0509_glibc_packages }}"
+    state: latest
+    only_upgrade: true
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+    fail_on_autoremove: true
+    policy_rc_d: 101
+    lock_timeout: 120
+  register: u0509_update_result
+
+- name: U0509 Ubuntu 추가 업데이트 여부 확인
+  ansible.builtin.apt:
+    name: "{{ u0509_glibc_packages }}"
+    state: latest
+    only_upgrade: true
+    update_cache: false
+    install_recommends: false
+    fail_on_autoremove: true
+    policy_rc_d: 101
+    lock_timeout: 120
+  check_mode: true
+  register: u0509_pending_update
+
+- name: U0509 Ubuntu 최신 패키지 적용 검증
+  ansible.builtin.assert:
+    that:
+      - not u0509_pending_update.changed
+    fail_msg: 활성 저장소에 적용 가능한 glibc 관련 패키지 업데이트가 남아 있습니다.
+  when: not ansible_check_mode
+
+- name: U0509 Ubuntu 변경 후 패키지 버전 조회
+  ansible.builtin.command:
+    argv: >-
+      {{ ['dpkg-query', '-W', '-f=${binary:Package}\t${Version}\n']
+         + u0509_glibc_packages }}
+  register: u0509_packages_after
+  changed_when: false
+  check_mode: false
+
+- name: U0509 Ubuntu 변경 후 glibc 실행 버전 조회
+  ansible.builtin.command:
+    argv:
+      - getconf
+      - GNU_LIBC_VERSION
+  register: u0509_glibc_after
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: U0509 Ubuntu 재부팅 필요 파일 확인
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: u0509_reboot_required
+
+- name: U0509 Ubuntu needrestart 설치 상태 확인
+  ansible.builtin.stat:
+    path: /usr/sbin/needrestart
+  register: u0509_needrestart_binary
+
+- name: U0509 Ubuntu 재시작 대상 조회
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/needrestart
+      - -b
+  register: u0509_needrestart_result
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: u0509_needrestart_binary.stat.exists
+
+- name: U0509 Ubuntu 적용 결과 안내
+  ansible.builtin.debug:
+    msg:
+      - "GCC 실행 파일 존재 여부: {{ u0509_gcc_binary.stat.exists }}"
+      - "변경 전 패키지: {{ u0509_packages_before.stdout_lines }}"
+      - "변경 후 패키지: {{ u0509_packages_after.stdout_lines }}"
+      - "변경 전 glibc 실행 버전: {{ u0509_glibc_before.stdout | default('미확인') }}"
+      - "변경 후 glibc 실행 버전: {{ u0509_glibc_after.stdout | default('미확인') }}"
+      - "패키지 변경 여부: {{ u0509_update_result.changed }}"
+      - >-
+        재부팅 필요 여부: {{ 'REQUIRED' if u0509_reboot_required.stat.exists
+        else 'NOT_REQUIRED' }}
+      - >-
+        needrestart 결과: {{ u0509_needrestart_result.stdout_lines
+        | default(['needrestart 미설치']) }}
+      - 서비스 재시작과 서버 재부팅은 자동 수행하지 않았습니다.
