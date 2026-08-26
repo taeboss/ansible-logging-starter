@@ -2,10 +2,11 @@
 - name: U0510 Red Hat 계열 확인
   ansible.builtin.assert:
     that:
-      - ansible_os_family == 'RedHat'
+      - ansible_facts['os_family'] == 'RedHat'
     fail_msg: >-
       U0510 Red Hat 계열 조치를 지원하지 않는 OS입니다:
-      {{ ansible_distribution }} {{ ansible_distribution_version }}
+      {{ ansible_facts['distribution'] }}
+      {{ ansible_facts['distribution_version'] }}
 
 - name: U0510 Red Hat 계열 설치 패키지 정보 수집
   ansible.builtin.package_facts:

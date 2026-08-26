@@ -2,10 +2,11 @@
 - name: U0510 Ubuntu 확인
   ansible.builtin.assert:
     that:
-      - ansible_distribution == 'Ubuntu'
+      - ansible_facts['distribution'] == 'Ubuntu'
     fail_msg: >-
       U0510 Ubuntu 조치를 지원하지 않는 OS입니다:
-      {{ ansible_distribution }} {{ ansible_distribution_version }}
+      {{ ansible_facts['distribution'] }}
+      {{ ansible_facts['distribution_version'] }}
 
 - name: U0510 Ubuntu 설치 패키지 정보 수집
   ansible.builtin.package_facts:
