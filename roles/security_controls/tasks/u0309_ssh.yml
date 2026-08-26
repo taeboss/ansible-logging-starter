@@ -154,4 +154,4 @@
       - >-
         /etc/pam.d/login={{ u0309_pam_login.stat.exists }},
         /etc/securetty={{ u0309_securetty.stat.exists }}
-      - Telnet PAM 및 securetty 자동 조치는 제외했습니다.
+      - Telnet PAM 및 securetty는 추후 확인과 담당자 협의 후 직접 조치해야 합니다.
