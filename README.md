@@ -116,69 +116,18 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 ### 자산 진단 체크 취약점별 조치 현황
 
 자산 진단 체크 항목은 취약점 코드별 통합 플레이북과 OS별 Role 태스크로
-분리한다. 각 설정은 하나의 취약점 플레이북만 변경하며 기존 통합 플레이북에서는
-중복 적용하지 않는다. 사전점검 플레이북의 읽기 전용 수집은 중복 적용이 아니므로
-유지한다.
+분리한다. 세부 진단 기준, OS별 구현, 실행 명령, 검증 방법과 직접 조치 사항은
+각 조치 항목의 링크 문서에서 확인한다.
 
-| 조치 방법 | 상태 | 통합 플레이북 | OS별 Role 태스크 | 자동 조치 | 직접 조치 |
-|---|---:|---|---|---|---|
-| [U0308 - Session Timeout 설정](docs/remediation/U0308.md) | ✅ | `playbooks/controls/U0308.yml` | `u0308_redhat.yml`, `u0308_ubuntu.yml` | `/etc/profile`의 비정상 `TMOUT` 지시문을 정리한다. 유효값이 없거나 0·비숫자·300초 초과이면 300초로 설정하고, 기존 1초 이상 300초 이하 값은 유지한다. | 없음. 새 로그인 세션에서 적용 여부 확인 |
-| [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md) | 🟡 | `playbooks/controls/U0309.yml` | `u0309_redhat.yml`, `u0309_ubuntu.yml` | SSH: `PermitRootLogin no`, `PermitEmptyPasswords no`, 구문·유효 설정·서비스 상태 검증 | Telnet: 직접 조치 필요. 플레이북은 TCP/23, `/etc/pam.d/login`, `/etc/securetty` 현황만 확인한다. |
-| [U0509 - glibc 버전 취약성](docs/remediation/U0509.md) | 🟡 | `playbooks/controls/U0509.yml` | `u0509_redhat.yml`, `u0509_ubuntu.yml` | 설치된 glibc 관련 패키지를 OS 공식 저장소의 최신 버전으로 업데이트하고 추가 업데이트 여부를 검증한다. GCC는 현황만 확인한다. | 업무 서비스 영향 확인 후 필요한 서비스 재시작 또는 서버 재부팅 |
-| [U0510 - OpenSSL 버전 취약성](docs/remediation/U0510.md) | 🟡 | `playbooks/controls/U0510.yml` | `u0510_redhat.yml`, `u0510_ubuntu.yml` | 설치된 OpenSSL 실행 패키지와 라이브러리를 OS 공식 저장소의 최신 버전으로 업데이트하고 추가 업데이트 여부를 검증한다. | 업무 서비스 영향 확인 후 필요한 서비스 재시작 또는 서버 재부팅 |
+| 조치 항목 | 상태 | 통합 플레이북 | 조치 범위 |
+|---|---:|---|---|
+| [U0308 - Session Timeout 설정](docs/remediation/U0308.md) | ✅ | `playbooks/controls/U0308.yml` | 로그인 셸 `TMOUT` 설정 |
+| [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md) | 🟡 | `playbooks/controls/U0309.yml` | root SSH 접근 제한, Telnet 현황 확인 |
+| [U0509 - glibc 버전 취약성](docs/remediation/U0509.md) | 🟡 | `playbooks/controls/U0509.yml` | 설치된 glibc 관련 패키지 최신화 |
+| [U0510 - OpenSSL 버전 취약성](docs/remediation/U0510.md) | 🟡 | `playbooks/controls/U0510.yml` | 설치된 OpenSSL 관련 패키지 최신화 |
 
-취약점별 조치가 추가되어 기존 로깅·로그인 정책의 세부 내용을 완전히 대체하면
-아래 잔여 요구사항 표에서 해당 행을 삭제한다. 일부만 대체한 경우에는 아직
-구현하지 않은 잔여 범위만 남긴다.
-
-U0308은 `/etc/profile` 끝의 전용 관리 블록에서 새 로그인 셸의 `TMOUT`을
-1초 이상 300초 이하로 제한한다. 미설정·0·비숫자·300초 초과 값은 300초로 보정하고,
-300초를 초과하거나 비정상인 기존 활성 지시문은 관리 블록 밖에서 제거한다.
-기존 1초 이상 300초 이하 값은 유지한다. 서비스 재시작과 재부팅은 필요하지 않다.
-
-```bash
-ansible-playbook playbooks/controls/U0308.yml \
-  --limit TARGET --check --diff
-```
-
-U0309는 접속 장애 위험을 줄이기 위해 한 대씩 실행한다. Red Hat 계열은
-`sshd`를 reload하고 Ubuntu는 `ssh`를 restart한다. 변경 전 SSH 구문이나
-서비스 상태가 정상이 아니거나, 변경 후 유효 설정이 기준과 다르면 서비스에
-반영하지 않고 중단한다.
-
-먼저 시험 서버 한 대에서 점검 모드로 변경 예정 내용을 확인한다.
-
-```bash
-ansible-playbook playbooks/controls/U0309.yml \
-  --limit TARGET --check --diff
-```
-
-점검 결과를 검토한 후 `--check --diff`를 제거하여 실제 적용한다. Telnet이
-TCP/23에서 수신 중인 서버는 플레이 결과에 `LISTENING`으로 표시되며 담당자
-협의 후 PAM과 `/etc/securetty`를 별도로 조치한다.
-
-U0509는 전체 OS를 업그레이드하지 않고 현재 설치된 glibc 관련 패키지만
-최신화한다. 배포판의 보안 백포트를 인정하므로 upstream 버전 숫자만으로
-양호·취약을 판단하지 않고 OS 패키지 전체 버전과 추가 업데이트 여부를 확인한다.
-GCC는 설치하거나 업데이트하지 않고 실행 파일 존재 여부만 출력한다.
-
-```bash
-ansible-playbook playbooks/controls/U0509.yml \
-  --limit TARGET --check --diff
-```
-
-U0510은 전체 OS를 업그레이드하지 않고 현재 설치된 OpenSSL 관련 패키지만
-최신화한다. 배포판의 보안 백포트를 인정하므로 upstream 버전 숫자만으로
-양호·취약을 판단하지 않고 OS 패키지 전체 버전과 추가 업데이트 여부를 확인한다.
-서비스 재시작과 재부팅은 자동 수행하지 않는다.
-
-```bash
-ansible-playbook playbooks/controls/U0510.yml \
-  --limit TARGET --check --diff
-```
-
-네 통합 플레이북은 대상 서버 facts를 기준으로 Red Hat 계열과 Ubuntu Role
-태스크를 자동 선택한다. 지원하지 않는 OS는 변경하지 않고 오류로 종료한다.
+취약점별 조치가 기존 로깅·로그인 정책의 세부 내용을 완전히 대체하면 아래 잔여
+요구사항 표에서 해당 행을 삭제하고, 일부만 대체한 경우에는 미구현 범위만 남긴다.
 
 ### 로깅 정책 잔여 요구사항
 
