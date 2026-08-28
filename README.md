@@ -8,6 +8,7 @@ journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시�
 ### 자산 진단 체크 취약점별 조치 방법
 
 - [취약점별 조치 현황과 작성 기준](docs/remediation/README.md)
+- [U0111 - 계정이 존재하지 않는 GID 금지](docs/remediation/U0111.md) (보류 중)
 - [U0207 - /etc/hosts 파일 권한 설정](docs/remediation/U0207.md)
 - [U0218 - /etc/hosts.allow, /etc/hosts.deny 설정](docs/remediation/U0218.md) (보류 중)
 - [U0221 - world writable 파일 점검](docs/remediation/U0221.md) (보류 중)
@@ -129,6 +130,7 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 
 | 조치 항목 | 상태 | 실행 플레이북 | OS별 Role 태스크 | 자동 조치 | 직접 조치 |
 |---|---:|---|---|---|---|
+| [U0111 - 계정이 존재하지 않는 GID 금지](docs/remediation/U0111.md) | ⚪ 미구현(검토 보류) | 미작성 | 미작성 | 없음 | 서버별 사용 여부와 OS·패키지 기본 그룹 여부 확인 후 개별 조치 |
 | [U0207 - /etc/hosts 파일 권한 설정](docs/remediation/U0207.md) | ✅ | `playbooks/controls/U0207.yml` | `u0207_redhat.yml`, `u0207_ubuntu.yml` | 링크 원본을 포함해 root 소유 및 `0600` 이하 권한 설정 | 업무·서비스 계정 이름 해석 확인 |
 | [U0218 - /etc/hosts.allow, /etc/hosts.deny 설정](docs/remediation/U0218.md) | ⚪ 미구현(검토 보류) | 미작성 | 미작성 | 없음 | 허용 서비스·접근 원천과 OS별 접근제어 방식 확정 필요 |
 | [U0221 - world writable 파일 점검](docs/remediation/U0221.md) | ⚪ 미구현(검토 보류) | 미작성 | 미작성 | 없음 | 서버별 진단 결과와 사용 이유 확인 후 권한 제거 또는 삭제 |
