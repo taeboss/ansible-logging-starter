@@ -9,6 +9,8 @@ journald, rsyslog 및 정기 점검을 단계적으로 관리하기 위한 시�
 
 - [취약점별 조치 현황과 작성 기준](docs/remediation/README.md)
 - [U0207 - /etc/hosts 파일 권한 설정](docs/remediation/U0207.md)
+- [U0218 - /etc/hosts.allow, /etc/hosts.deny 설정](docs/remediation/U0218.md) (보류 중)
+- [U0221 - world writable 파일 점검](docs/remediation/U0221.md) (보류 중)
 - [U0307 - 서비스 Banner 관리](docs/remediation/U0307.md)
 - [U0308 - Session Timeout 설정](docs/remediation/U0308.md)
 - [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md)
