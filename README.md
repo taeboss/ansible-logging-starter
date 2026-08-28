@@ -114,6 +114,9 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 - ✅ 적용 가능: 현재 플레이북 또는 Role에 구현되어 있다.
 - 🟡 부분 적용: 일부 구현됐지만 추가 정보, 스케줄 또는 외부 시스템이 필요하다.
 - ⚪ 미구현: Ansible로 구현할 수 있지만 현재 실행 코드에는 없다.
+- ⚪ 미구현(검토 보류): 운영 영향이나 조치 방법에 우려되는 부분이 있어 검토가
+  끝날 때까지 실행 코드를 작성하지 않는다. 구체적인 보류 사유는 해당 취약점
+  문서와 현황 표에 함께 기록한다.
 - 🚫 외부 절차: Ansible만으로 보장할 수 없는 사람·IAM·SIEM 영역이다.
 
 ### 자산 진단 체크 취약점별 조치 현황
@@ -125,6 +128,8 @@ ssh-keygen -lf ~/.ssh/ansible_ed25519.pub
 | 조치 항목 | 상태 | 실행 플레이북 | OS별 Role 태스크 | 자동 조치 | 직접 조치 |
 |---|---:|---|---|---|---|
 | [U0207 - /etc/hosts 파일 권한 설정](docs/remediation/U0207.md) | ✅ | `playbooks/controls/U0207.yml` | `u0207_redhat.yml`, `u0207_ubuntu.yml` | 링크 원본을 포함해 root 소유 및 `0600` 이하 권한 설정 | 업무·서비스 계정 이름 해석 확인 |
+| [U0218 - /etc/hosts.allow, /etc/hosts.deny 설정](docs/remediation/U0218.md) | ⚪ 미구현(검토 보류) | 미작성 | 미작성 | 없음 | 허용 서비스·접근 원천과 OS별 접근제어 방식 확정 필요 |
+| [U0221 - world writable 파일 점검](docs/remediation/U0221.md) | ⚪ 미구현(검토 보류) | 미작성 | 미작성 | 없음 | 서버별 진단 결과와 사용 이유 확인 후 권한 제거 또는 삭제 |
 | [U0307 - 서비스 Banner 관리](docs/remediation/U0307.md) | 🟡 | `U0307-check.yml`, `U0307-ssh.yml` | `u0307_check_*`, `u0307_ssh_*` | 서비스 사용 현황 점검, 경고문과 SSH 배너 조치 | MOTD 체크 추후 확인, Telnet·FTP·SMTP·DNS 제품별 조치 |
 | [U0308 - Session Timeout 설정](docs/remediation/U0308.md) | ✅ | `playbooks/controls/U0308.yml` | `u0308_redhat.yml`, `u0308_ubuntu.yml` | 로그인 셸 `TMOUT` 설정 | 새 로그인 세션에서 적용 확인 |
 | [U0309 - root 계정 Telnet·SSH 접근 제한](docs/remediation/U0309.md) | 🟡 | `playbooks/controls/U0309.yml` | `u0309_redhat.yml`, `u0309_ubuntu.yml` | root SSH 접근 제한, Telnet 현황 확인 | Telnet PAM과 `/etc/securetty` 추후 확인·직접 조치 |
